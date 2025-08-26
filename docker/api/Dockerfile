@@ -2,12 +2,15 @@
 
 FROM node:22-slim AS base
 
-# Install system dependencies for Playwright
+# Install system dependencies for Playwright and enhanced xvfb support
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
     gnupg \
     ca-certificates \
+    procps \
+    xvfb \
+    x11-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Playwright system dependencies
@@ -39,9 +42,17 @@ RUN npx playwright install chromium --with-deps
 COPY apps/ ./apps/
 COPY packages/ ./packages/
 
-# Copy and setup entrypoint script
+# Copy and setup entrypoint and xvfb wrapper scripts
 COPY docker/api/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY docker/api/xvfb-wrapper.sh /usr/local/bin/xvfb-wrapper.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/xvfb-wrapper.sh
+
+# Setup X11 directories and permissions for Xvfb
+RUN mkdir -p /tmp/.X11-unix \
+    && chmod 1777 /tmp/.X11-unix \
+    && mkdir -p /tmp/logs \
+    && chmod 755 /tmp/logs
 
 # Create data directory for SQLite
 RUN mkdir -p /app/data && chmod 755 /app/data

@@ -124,9 +124,27 @@ export class CreditTrackerService {
   }
 
   /**
-   * Check if service has available credits
+   * Check if service has available credits AND is properly configured
    */
   async hasAvailableCredits(service: string, requiredCredits: number = 1): Promise<boolean> {
+    // Check service configuration first - if not configured, no point checking credits
+    if (service === 'scraperapi') {
+      const config = this.configService.get('paidServices.scraperapi');
+      if (!config?.enabled || !config?.apiKey) {
+        this.logger.debug('ScraperAPI not configured or disabled');
+        return false;
+      }
+    }
+    
+    if (service === 'scrapingdog') {
+      const config = this.configService.get('paidServices.scrapingdog');
+      if (!config?.enabled || !config?.apiKey) {
+        this.logger.debug('ScrapingDog not configured or disabled');
+        return false;
+      }
+    }
+    
+    // If configured, then check credit limits
     const limits = await this.getServiceLimits();
     
     if (service === 'scraperapi') {

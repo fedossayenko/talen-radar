@@ -52,7 +52,6 @@ export class PaidScraperService {
    * Scrape using ScraperAPI
    */
   async scrapeWithScraperAPI(options: PaidScrapingOptions): Promise<PaidScrapingResponse> {
-    const startTime = Date.now();
     const config = this.configService.get('paidServices.scraperapi');
     
     if (!config?.apiKey) {
@@ -60,14 +59,41 @@ export class PaidScraperService {
     }
 
     try {
-      this.logger.log(`Using ScraperAPI for ${options.url}`);
+      // Try REST API first
+      return await this.scrapeWithScraperAPIRest(options);
+    } catch (error) {
+      // If REST API fails with protected domain error, try proxy approach
+      if (error.message.includes('Protected domain') || error.message.includes('premium')) {
+        this.logger.warn(`REST API failed, trying ScraperAPI proxy approach: ${error.message}`);
+        try {
+          return await this.scrapeWithScraperAPIProxy(options);
+        } catch (proxyError) {
+          this.logger.error(`Both REST and proxy approaches failed: ${proxyError.message}`);
+          throw proxyError;
+        }
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Scrape using ScraperAPI REST API (original method)
+   */
+  private async scrapeWithScraperAPIRest(options: PaidScrapingOptions): Promise<PaidScrapingResponse> {
+    const startTime = Date.now();
+    const config = this.configService.get('paidServices.scraperapi');
+
+    try {
+      this.logger.log(`Using ScraperAPI REST for ${options.url}`);
       
       // Build URL manually to match the working format from user's test
       // Double-encode brackets to match ScraperAPI's expected format
       const encodedUrl = encodeURIComponent(options.url)
         .replace(/%5B/g, '%255B')  // Double-encode [
         .replace(/%5D/g, '%255D'); // Double-encode ]
-      const requestUrl = `${config.baseUrl}/?api_key=${config.apiKey}&url=${encodedUrl}&device_type=desktop&premium=true&render=true&wait=5000`;
+      
+      // Use basic parameters for free tier compatibility
+      const requestUrl = `${config.baseUrl}/?api_key=${config.apiKey}&url=${encodedUrl}&device_type=desktop`;
       
       this.logger.log(`ScraperAPI Request URL: ${requestUrl}`);
 
@@ -107,7 +133,7 @@ export class PaidScraperService {
         throw new Error('ScraperAPI returned empty or minimal content');
       }
 
-      this.logger.log(`ScraperAPI success: ${html.length} chars, ${credits} credits, ${processingTime}ms`);
+      this.logger.log(`ScraperAPI REST success: ${html.length} chars, ${credits} credits, ${processingTime}ms`);
 
       return {
         html,
@@ -125,13 +151,88 @@ export class PaidScraperService {
 
     } catch (error) {
       const processingTime = Date.now() - startTime;
-      this.logger.error(`ScraperAPI failed for ${options.url}: ${error.message}`);
+      
+      // Check if it's a premium plan limitation for protected domains
+      if (error.response?.data && typeof error.response.data === 'string') {
+        if (error.response.data.includes('current plan does not allow you to use our premium proxies')) {
+          throw new Error(`Protected domain ${options.siteName} requires premium ScraperAPI plan. Current plan: free tier.`);
+        }
+        
+        if (error.response.data.includes('Protected domains may require adding premium=true')) {
+          throw new Error(`Protected domain ${options.siteName} requires premium ScraperAPI parameters.`);
+        }
+      }
+      
+      this.logger.error(`ScraperAPI REST failed for ${options.url}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Scrape using ScraperAPI Proxy approach (for protected domains)
+   */
+  private async scrapeWithScraperAPIProxy(options: PaidScrapingOptions): Promise<PaidScrapingResponse> {
+    const startTime = Date.now();
+    const config = this.configService.get('paidServices.scraperapi');
+
+    try {
+      this.logger.log(`Using ScraperAPI Proxy for ${options.url}`);
+
+      // Use axios directly with proxy configuration
+      const axios = require('axios');
+      const response = await axios.get(options.url, {
+        method: 'GET',
+        timeout: options.timeout ?? config.timeout,
+        proxy: {
+          host: 'proxy-server.scraperapi.com',
+          port: 8001,
+          auth: {
+            username: 'scraperapi.device_type=desktop',
+            password: config.apiKey
+          },
+          protocol: 'http'
+        },
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
+        maxRedirects: 5,
+        validateStatus: () => true, // Accept all status codes
+      });
+
+      const processingTime = Date.now() - startTime;
+      const credits = this.calculateCredits(options.siteName, 'scraperapi');
+      
+      const html = typeof response.data === 'string' ? response.data : String(response.data);
+      
+      if (!html || html.length < 100) {
+        throw new Error('ScraperAPI Proxy returned empty or minimal content');
+      }
+
+      this.logger.log(`ScraperAPI Proxy success: ${html.length} chars, ${credits} credits, ${processingTime}ms`);
+
+      return {
+        html,
+        success: true,
+        credits,
+        service: 'scraperapi-proxy',
+        processingTime,
+        metadata: {
+          originalUrl: options.url,
+          finalUrl: response.request?.res?.responseUrl || options.url,
+          statusCode: response.status,
+          responseHeaders: response.headers as Record<string, string>,
+        },
+      };
+
+    } catch (error) {
+      const processingTime = Date.now() - startTime;
+      this.logger.error(`ScraperAPI Proxy failed for ${options.url}: ${error.message}`);
       
       return {
         html: '',
         success: false,
         credits: 0,
-        service: 'scraperapi',
+        service: 'scraperapi-proxy',
         processingTime,
         error: error.message,
         metadata: {

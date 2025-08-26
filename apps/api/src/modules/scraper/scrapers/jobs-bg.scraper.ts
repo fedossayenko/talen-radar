@@ -78,9 +78,11 @@ export class JobsBgScraper extends BaseScraper {
           throw new Error(response.error || 'No content received');
         }
 
-        // Check for DataDome protection
+        // Check for DataDome protection - if detected, immediately skip to paid service
         if (this.isCaptchaOrBlocked(response.html)) {
-          throw new Error('DataDome protection detected - blocked by anti-bot system');
+          this.logger.warn(`🚫 CAPTCHA/DataDome detected on attempt ${attempt} - skipping remaining free attempts, switching to paid service`);
+          lastError = 'DataDome CAPTCHA detected - requires premium service';
+          break; // Exit retry loop immediately
         }
 
         // Success! Parse and return results
@@ -259,6 +261,9 @@ export class JobsBgScraper extends BaseScraper {
   private buildSearchUrl(page: number, keywords: string[], location?: string, experienceLevel?: string): string {
     const params = new URLSearchParams();
     
+    // Add submit parameter for better compatibility
+    params.append('subm', '1');
+    
     // Add categories - using Java category 56 based on user's example
     if (keywords.includes('Java')) {
       params.append('categories[]', '56');
@@ -342,15 +347,15 @@ export class JobsBgScraper extends BaseScraper {
 
   private processJobElement($: cheerio.CheerioAPI, element: any): JobListing | null {
     try {
-      // Updated selectors based on actual jobs.bg HTML structure
-      const titleElement = $(element).find('.card-title span').last();
-      const companyElement = $(element).find('.card-logo-info .secondary-text');
+      // Updated selectors based on actual jobs.bg mobile HTML structure
+      const linkElement = $(element).find('a.black-link-b').first();
+      const titleElement = linkElement.find('span').first();
+      const companyElement = $(element).find('a[href*="/company/"]').first();
       const cardInfoElement = $(element).find('.card-info');
-      const linkElement = $(element).find('.card-title').closest('a');
       const dateElement = $(element).find('.card-date');
       
       const title = titleElement.text().trim();
-      const company = companyElement.text().trim();
+      const company = companyElement.attr('title')?.trim() || '';
       const link = linkElement.attr('href');
       const dateText = dateElement.first().contents().filter(function() {
         return this.nodeType === 3; // Text node
@@ -516,8 +521,12 @@ export class JobsBgScraper extends BaseScraper {
       // DataDome active blocking pages (not CSP references)
       'datadome.co/captcha',
       'dd.captcha-delivery.com/captcha',
+      'geo.captcha-delivery.com/captcha',
+      'ct.captcha-delivery.com',
       'captcha-delivery.com/interstitial',
+      'captcha-delivery.com/captcha',
       'DataDome Captcha',
+      'DataDome CAPTCHA',
       'DataDome Device Check',
       'Just a moment',
       'Verifying your browser',
@@ -576,21 +585,23 @@ export class JobsBgScraper extends BaseScraper {
    */
   private async fetchWithStealthBrowser(url: string, options?: { infiniteScroll?: boolean, warmup?: boolean }) {
     try {
-      this.logger.log('🔥 JOBS.BG EXTREME BYPASS MODE: Mobile + Headful + Ultra-Slow');
+      this.logger.log('🔥 JOBS.BG BYPASS MODE: Desktop + Headful + Optimized');
       
-      // EXTREME DataDome bypass: Mobile + Headful + Ultra-slow timing
+      // DataDome bypass: Desktop + Headful + optimized timing
+      // Allow override via environment variable for Docker compatibility
+      const forceHeadless = process.env.SCRAPER_FORCE_HEADLESS === 'true';
       const session = await this.browserEngine.getSession({
         siteName: 'jobs.bg',
-        headless: false, // 🚨 HEADFUL BROWSER - Most important change!
+        headless: forceHeadless ? true : false, // 🚨 HEADFUL BROWSER - Most important change!
         stealth: true,
-        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1', // Mobile user agent
-        viewport: { width: 375, height: 667 }, // iPhone viewport
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36', // Desktop user agent
+        viewport: { width: 1920, height: 1080 }, // Desktop viewport
         loadImages: true,
         timeout: 120000, // 2 minutes timeout
       });
       
-      // EXTREME MULTI-PHASE BYPASS STRATEGY
-      this.logger.log('📱 Phase 1: Mobile homepage visit (building trust)');
+      // MULTI-PHASE BYPASS STRATEGY
+      this.logger.log('🖥️ Phase 1: Desktop homepage visit (building trust)');
       
       // Phase 1: Visit mobile homepage and simulate real mobile user
       await session.page.setExtraHTTPHeaders({
@@ -611,23 +622,23 @@ export class JobsBgScraper extends BaseScraper {
         this.logger.warn('Homepage failed, but continuing...');
       }
       
-      // Phase 2: Simulate real mobile user behavior - scroll, wait, interact
-      this.logger.log('📱 Phase 2: Simulating mobile user interactions');
+      // Phase 2: Simulate real desktop user behavior - scroll, wait, interact
+      this.logger.log('🖥️ Phase 2: Simulating desktop user interactions');
       await session.page.evaluate(() => {
-        // Mobile-like scrolling
-        window.scrollTo(0, 100);
-        setTimeout(() => window.scrollTo(0, 200), 500);
+        // Desktop-like scrolling
+        window.scrollTo(0, 200);
+        setTimeout(() => window.scrollTo(0, 400), 500);
         setTimeout(() => window.scrollTo(0, 0), 1000);
       });
       
       // ULTRA-LONG WAIT - DataDome bypass
-      this.logger.log('⏰ Phase 3: ULTRA-LONG WAIT (60+ seconds to build trust)');
-      const ultraWait = 60000 + Math.random() * 30000; // 60-90 seconds
+      this.logger.log('⏰ Phase 3: ULTRA-LONG WAIT (10-20 seconds to build trust)');
+      const ultraWait = 10000 + Math.random() * 10000; // 10-20 seconds
       this.logger.log(`Waiting ${Math.round(ultraWait/1000)} seconds...`);
       await session.page.waitForTimeout(ultraWait);
       
-      // Phase 4: Navigate to job search with mobile headers
-      this.logger.log('📱 Phase 4: Mobile job search navigation');
+      // Phase 4: Navigate to job search with desktop headers  
+      this.logger.log('🖥️ Phase 4: Desktop job search navigation');
       await session.page.setExtraHTTPHeaders({
         'Referer': 'https://www.jobs.bg/',
         'Sec-Fetch-Site': 'same-origin',
@@ -638,8 +649,8 @@ export class JobsBgScraper extends BaseScraper {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       });
 
-      // Phase 5: Final navigation with mobile stealth
-      this.logger.log('📱 Phase 5: Final search page navigation');
+      // Phase 5: Final navigation with desktop stealth
+      this.logger.log('🖥️ Phase 5: Final search page navigation');
       return await this.browserEngine.fetchPage(url, session, {
         ...options,
         stealth: true,

@@ -43,9 +43,8 @@ export class VacancyService {
       }
 
       if (technologies && technologies.length > 0) {
-        where.requirements = {
-          contains: Array.isArray(technologies) ? technologies.join(',') : technologies,
-          mode: 'insensitive',
+        where.technologies = {
+          array_contains: Array.isArray(technologies) ? technologies : [technologies]
         };
       }
 

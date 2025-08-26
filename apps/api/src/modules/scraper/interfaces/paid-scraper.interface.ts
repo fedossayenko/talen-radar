@@ -22,6 +22,7 @@ export interface PaidScrapingResponse {
     statusCode: number;
     responseHeaders?: Record<string, string>;
     proxyCountry?: string;
+    limitation?: 'premium_required' | 'protected_domain' | string;
   };
 }
 
