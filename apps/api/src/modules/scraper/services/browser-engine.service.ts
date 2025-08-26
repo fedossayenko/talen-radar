@@ -103,16 +103,20 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
     // If stealth mode is enabled, perform enhanced behavior
     if (options?.stealth) {
       try {
-        // Warm-up navigation (30% chance)
-        if (options.warmup && Math.random() < 0.3) {
-          await this.performWarmupNavigation(session);
+        // Skip warm-up navigation (causes detection) but simulate realistic referrer chain
+        if (!options.warmup) {
+          // Simulate coming from Google search
+          await session.page.setExtraHTTPHeaders({
+            'Referer': 'https://www.google.com/search?q=java+jobs+bulgaria',
+            'Sec-Fetch-Site': 'cross-site'
+          });
         }
         
-        // Pre-navigation behavior simulation
+        // Pre-navigation behavior simulation with longer delays
         await this.simulateHumanBehavior(session.page);
         
-        // Add random delay before navigation
-        await session.page.waitForTimeout(Math.random() * 3000 + 2000);
+        // Add longer random delay before navigation (DataDome bypass)
+        await session.page.waitForTimeout(Math.random() * 8000 + 5000);
       } catch (error) {
         this.logger.debug('Stealth behavior simulation error (non-critical):', error.message);
       }
@@ -126,13 +130,13 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
       session.lastActivity = new Date();
       session.requestCount++;
 
-      // Add random delay before navigation (human-like behavior)
-      await session.page.waitForTimeout(Math.random() * 2000 + 1000);
+      // Add random delay before navigation (human-like behavior) - longer for DataDome
+      await session.page.waitForTimeout(Math.random() * 5000 + 3000);
       
-      // Navigate to page with realistic timing
+      // Navigate to page with realistic timing and enhanced stealth
       const response = await session.page.goto(url, {
-        waitUntil: 'domcontentloaded',
-        timeout: session.config.timeout || 30000,
+        waitUntil: 'networkidle',  // Wait for network to be idle
+        timeout: session.config.timeout || 45000,  // Longer timeout for stealth
       });
 
       if (!response) {
@@ -450,7 +454,7 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
   }
 
   /**
-   * Launch browser with optional stealth capabilities
+   * Launch browser with optional stealth capabilities and undetected mode for jobs.bg
    */
   private async launchBrowser(config: BrowserSessionConfig) {
     const baseArgs = [
@@ -473,12 +477,53 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
       '--disable-backgrounding-occluded-windows',
       '--disable-renderer-backgrounding',
     ];
+    
+    // EXTREME UNDETECTED ARGS for jobs.bg DataDome bypass
+    const undetectedArgs = [
+      '--disable-blink-features=AutomationControlled',
+      '--exclude-switches=enable-automation',
+      '--disable-extensions',
+      '--no-sandbox',
+      '--disable-infobars',
+      '--disable-dev-shm-usage',
+      '--disable-browser-side-navigation',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-features=ScriptStreaming',
+      '--disable-features=VizDisplayCompositor,VizHitTestSurfaceLayer',
+      '--disable-features=TranslateUI',
+      '--disable-ipc-flooding-protection',
+      '--disable-hang-monitor',
+      '--disable-client-side-phishing-detection',
+      '--disable-popup-blocking',
+      '--disable-prompt-on-repost',
+      '--disable-sync',
+      '--disable-component-extensions-with-background-pages',
+      '--disable-background-networking',
+      '--disable-component-update',
+      '--disable-domain-reliability'
+    ];
 
-    return await chromium.launch({
+    const finalArgs = config.siteName === 'jobs.bg' && config.stealth 
+      ? [...baseArgs, ...undetectedArgs]
+      : (config.stealth ? [...baseArgs, ...stealthArgs] : baseArgs);
+
+    const launchOptions = {
       headless: config.headless !== false,
-      args: config.stealth ? [...baseArgs, ...stealthArgs] : baseArgs,
-      ignoreDefaultArgs: config.stealth ? ['--enable-automation'] : undefined,
-    });
+      args: finalArgs,
+      ignoreDefaultArgs: config.stealth ? ['--enable-automation', '--enable-blink-features=IdleDetection'] : undefined,
+      devtools: false,
+    };
+    
+    // Special handling for jobs.bg headful mode
+    if (config.siteName === 'jobs.bg' && !config.headless) {
+      this.logger.log('🚀 Launching HEADFUL browser for jobs.bg DataDome bypass');
+      launchOptions.headless = false;
+      launchOptions.devtools = false;
+    }
+
+    return await chromium.launch(launchOptions);
   }
 
   /**
@@ -566,80 +611,231 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
   }
 
   /**
-   * Inject enhanced stealth scripts
+   * Inject enhanced stealth scripts with advanced DataDome bypass techniques
    */
   /* eslint-disable no-undef */
   private async injectStealthScripts(page: Page) {
     await page.addInitScript(() => {
-      // Override webdriver property
+      // Override webdriver property completely
       Object.defineProperty(navigator, 'webdriver', {
         get: () => undefined,
       });
+      
+      // Remove automation control flags
+      delete (window as any).__nightmare;
+      delete (window as any).__webdriver_evaluate;
+      delete (window as any).__webdriver_script_func;
+      delete (window as any).__webdriver_script_fn;
+      delete (window as any).__fxdriver_evaluate;
+      delete (window as any).__driver_unwrapped;
+      delete (window as any).__webdriver_unwrapped;
+      delete (window as any).__driver_evaluate;
+      delete (window as any).__selenium_evaluate;
+      delete (window as any).__fxdriver_unwrapped;
+      delete (window as any).__selenium_unwrapped;
 
-      // Enhanced plugin spoofing
+      // Enhanced plugin spoofing with realistic plugins
       Object.defineProperty(navigator, 'plugins', {
         get: () => [
-          { name: 'Chrome PDF Plugin', description: 'Portable Document Format', filename: 'internal-pdf-viewer' },
-          { name: 'Chrome PDF Viewer', description: '', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
-          { name: 'Native Client', description: '', filename: 'internal-nacl-plugin' },
+          { 
+            name: 'Chrome PDF Plugin', 
+            description: 'Portable Document Format', 
+            filename: 'internal-pdf-viewer',
+            length: 1,
+            item: () => null,
+            namedItem: () => null
+          },
+          { 
+            name: 'Chrome PDF Viewer', 
+            description: 'PDF Viewer', 
+            filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai',
+            length: 1,
+            item: () => null,
+            namedItem: () => null
+          },
+          { 
+            name: 'Native Client', 
+            description: 'Native Client Executable', 
+            filename: 'internal-nacl-plugin',
+            length: 2,
+            item: () => null,
+            namedItem: () => null
+          },
+          {
+            name: 'Microsoft Edge PDF Viewer',
+            description: 'PDF Viewer',
+            filename: 'pdf',
+            length: 1,
+            item: () => null,
+            namedItem: () => null
+          }
         ],
       });
 
-      // Language spoofing
+      // Randomized language spoofing
+      const languages = [['en-US', 'en'], ['en-GB', 'en'], ['en-CA', 'en', 'fr']];
+      const randomLang = languages[Math.floor(Math.random() * languages.length)];
       Object.defineProperty(navigator, 'languages', {
-        get: () => ['en-US', 'en'],
+        get: () => randomLang,
+      });
+      Object.defineProperty(navigator, 'language', {
+        get: () => randomLang[0],
       });
 
-      // Enhanced screen properties
-      Object.defineProperty(screen, 'availHeight', { get: () => 1040 });
-      Object.defineProperty(screen, 'availWidth', { get: () => 1920 });
+      // Enhanced screen properties with randomization
+      const screenConfigs = [
+        { width: 1920, height: 1080, availWidth: 1920, availHeight: 1040 },
+        { width: 1366, height: 768, availWidth: 1366, availHeight: 728 },
+        { width: 1440, height: 900, availWidth: 1440, availHeight: 860 },
+        { width: 1536, height: 864, availWidth: 1536, availHeight: 824 }
+      ];
+      const randomScreen = screenConfigs[Math.floor(Math.random() * screenConfigs.length)];
+      
+      Object.defineProperty(screen, 'width', { get: () => randomScreen.width });
+      Object.defineProperty(screen, 'height', { get: () => randomScreen.height });
+      Object.defineProperty(screen, 'availHeight', { get: () => randomScreen.availHeight });
+      Object.defineProperty(screen, 'availWidth', { get: () => randomScreen.availWidth });
       Object.defineProperty(screen, 'colorDepth', { get: () => 24 });
       Object.defineProperty(screen, 'pixelDepth', { get: () => 24 });
+      Object.defineProperty(screen, 'orientation', {
+        get: () => ({ type: 'landscape-primary', angle: 0 })
+      });
 
-      // Chrome runtime spoofing
+      // Enhanced Chrome runtime spoofing
       (window as any).chrome = {
         runtime: {
           onConnect: null,
           onMessage: null,
+          sendMessage: () => {},
+          connect: () => ({})
         },
         loadTimes: () => ({
-          commitLoadTime: Date.now() / 1000 - Math.random(),
+          commitLoadTime: Date.now() / 1000 - Math.random() * 0.1,
           connectionInfo: 'h2',
-          finishDocumentLoadTime: Date.now() / 1000 - Math.random(),
-          finishLoadTime: Date.now() / 1000 - Math.random(),
-          firstPaintAfterLoadTime: Date.now() / 1000 - Math.random(),
-          firstPaintTime: Date.now() / 1000 - Math.random(),
+          finishDocumentLoadTime: Date.now() / 1000 - Math.random() * 0.05,
+          finishLoadTime: Date.now() / 1000 - Math.random() * 0.05,
+          firstPaintAfterLoadTime: Date.now() / 1000 - Math.random() * 0.05,
+          firstPaintTime: Date.now() / 1000 - Math.random() * 0.1,
           navigationType: 'Other',
           npnNegotiatedProtocol: 'h2',
-          requestTime: Date.now() / 1000 - Math.random(),
-          startLoadTime: Date.now() / 1000 - Math.random(),
+          requestTime: Date.now() / 1000 - Math.random() * 0.2,
+          startLoadTime: Date.now() / 1000 - Math.random() * 0.2,
           wasAlternateProtocolAvailable: false,
           wasFetchedViaSpdy: true,
           wasNpnNegotiated: true,
         }),
-        csi: () => ({}),
+        csi: () => ({
+          onloadT: Date.now(),
+          pageT: Date.now(),
+          tran: Math.floor(Math.random() * 20) + 1
+        }),
+        app: {
+          isInstalled: false,
+          InstallState: 'not_installed',
+          RunningState: 'cannot_run'
+        }
       };
 
-      // Battery API spoofing
+      // Battery API spoofing with realistic values
       (navigator as any).getBattery = () => Promise.resolve({
-        charging: true,
-        chargingTime: 0,
-        dischargingTime: Infinity,
-        level: Math.random(),
+        charging: Math.random() > 0.5,
+        chargingTime: Math.random() > 0.5 ? Infinity : Math.random() * 3600,
+        dischargingTime: Math.random() * 18000 + 3600,
+        level: 0.1 + Math.random() * 0.9,
       });
 
-      // Connection spoofing
+      // Enhanced connection spoofing
       (navigator as any).connection = {
-        downlink: 10,
-        effectiveType: '4g',
+        downlink: Math.random() * 10 + 5,
+        effectiveType: ['slow-2g', '2g', '3g', '4g'][Math.floor(Math.random() * 4)],
         onchange: null,
-        rtt: 100,
+        rtt: Math.floor(Math.random() * 100) + 50,
         saveData: false,
+        type: 'wifi'
       };
+
+      // Canvas fingerprint randomization
+      const getImageData = HTMLCanvasElement.prototype.toDataURL;
+      HTMLCanvasElement.prototype.toDataURL = function(format) {
+        if (format === 'image/png') {
+          const context = this.getContext('2d');
+          const imageData = context.getImageData(0, 0, this.width, this.height);
+          for (let i = 0; i < imageData.data.length; i += 4) {
+            imageData.data[i + 0] = imageData.data[i + 0] + Math.floor(Math.random() * 10) - 5;
+            imageData.data[i + 1] = imageData.data[i + 1] + Math.floor(Math.random() * 10) - 5;
+            imageData.data[i + 2] = imageData.data[i + 2] + Math.floor(Math.random() * 10) - 5;
+          }
+          context.putImageData(imageData, 0, 0);
+        }
+        return getImageData.apply(this, arguments);
+      };
+
+      // WebGL fingerprint spoofing
+      const getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function(type) {
+        const context = getContext.apply(this, arguments);
+        if (type === 'webgl' || type === 'experimental-webgl') {
+          const getParameter = context.getParameter;
+          context.getParameter = function(parameter) {
+            if (parameter === 37445) {
+              return 'Intel Inc.'; // UNMASKED_VENDOR_WEBGL
+            }
+            if (parameter === 37446) {
+              return 'Intel(R) Iris(TM) Graphics 6100'; // UNMASKED_RENDERER_WEBGL
+            }
+            return getParameter.apply(this, arguments);
+          };
+        }
+        return context;
+      };
+
+      // Audio context spoofing
+      const audioContexts = ['AudioContext', 'webkitAudioContext'];
+      audioContexts.forEach(contextName => {
+        if (window[contextName]) {
+          const OriginalAudioContext = window[contextName];
+          window[contextName] = function() {
+            const context = new OriginalAudioContext();
+            const originalCreateOscillator = context.createOscillator;
+            context.createOscillator = function() {
+              const oscillator = originalCreateOscillator.apply(this, arguments);
+              const originalConnect = oscillator.connect;
+              oscillator.connect = function() {
+                const result = originalConnect.apply(this, arguments);
+                return result;
+              };
+              return oscillator;
+            };
+            return context;
+          };
+        }
+      });
+
+      // Memory info spoofing
+      if ('memory' in performance) {
+        Object.defineProperty(performance, 'memory', {
+          get: () => ({
+            jsHeapSizeLimit: Math.floor(Math.random() * 1000000000) + 1000000000,
+            totalJSHeapSize: Math.floor(Math.random() * 50000000) + 10000000,
+            usedJSHeapSize: Math.floor(Math.random() * 30000000) + 5000000
+          })
+        });
+      }
 
       // Remove automation indicators
       try {
         delete (window.navigator as any).__proto__.webdriver;
+        delete window['__webdriver_evaluate'];
+        delete window['__selenium_evaluate'];
+        delete window['__webdriver_script_function'];
+        delete window['__webdriver_script_func'];
+        delete window['__webdriver_script_fn'];
+        delete window['__fxdriver_evaluate'];
+        delete window['__driver_unwrapped'];
+        delete window['__webdriver_unwrapped'];
+        delete window['__driver_evaluate'];
+        delete window['__selenium_unwrapped'];
+        delete window['__fxdriver_unwrapped'];
       } catch {
         // Ignore
       }
