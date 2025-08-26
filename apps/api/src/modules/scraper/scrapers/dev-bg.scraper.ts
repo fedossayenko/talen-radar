@@ -32,9 +32,11 @@ export class DevBgScraper extends BaseScraper {
   ) {
     super(configService, 'dev.bg', browserEngine);
     
-    this.baseUrl = this.configService.get<string>('scraper.devBg.baseUrl', 'https://dev.bg');
-    this.apiUrl = this.configService.get<string>('scraper.devBg.apiUrl', 'https://dev.bg/company/jobs/java/');
-    this.maxPages = this.configService.get<number>('scraper.devBg.maxPages', 10);
+    // Load configuration using base class helper
+    const config = this.loadScraperConfig('devBg');
+    this.baseUrl = config.baseUrl || 'https://dev.bg';
+    this.apiUrl = config.searchUrl || 'https://dev.bg/company/jobs/java/';
+    this.maxPages = config.maxPages;
     
     this.logger.log('DevBgScraper constructor completed successfully');
   }
@@ -53,48 +55,23 @@ export class DevBgScraper extends BaseScraper {
       const response = await this.fetchPage(url, { useBrowser: false });
       if (!response.success || !response.html) {
         this.logger.warn(`Failed to fetch HTML from dev.bg for page ${page}: ${response.error || 'No content'}`);
-        return this.createEmptyResult(page, startTime, url);
+        return this.buildErrorResult(page, startTime, url, response.error || 'No content', 1);
       }
 
       const jobs = await this.parseJobsFromHtml(response.html, page);
       
-      // Apply limit if specified
-      const limitedJobs = limit && jobs.length > limit ? jobs.slice(0, limit) : jobs;
-      
-      if (limit && jobs.length > limit) {
-        this.logger.log(`Limiting results to ${limit} jobs (found ${jobs.length})`);
-      }
+      // Apply limit using base class helper
+      const limitedJobs = this.applyJobLimit(jobs, limit);
       
       // Check if there are more pages
       const hasNextPage = this.hasNextPage(response.html, page);
       
-      return {
-        jobs: limitedJobs,
-        totalFound: limitedJobs.length,
-        page,
-        hasNextPage,
-        errors: [],
-        metadata: {
-          processingTime: Date.now() - startTime,
-          sourceUrl: url,
-          requestCount: 1,
-        },
-      };
+      // Build result using base class helper
+      return this.buildSuccessResult(limitedJobs, page, hasNextPage, startTime, url, 1);
 
     } catch (error) {
       this.logger.error(`Failed to scrape dev.bg jobs for page ${page}:`, error.message);
-      return {
-        jobs: [],
-        totalFound: 0,
-        page,
-        hasNextPage: false,
-        errors: [error.message],
-        metadata: {
-          processingTime: Date.now() - startTime,
-          sourceUrl: this.apiUrl,
-          requestCount: 1,
-        },
-      };
+      return this.buildErrorResult(page, startTime, this.apiUrl, error.message, 1);
     }
   }
 
@@ -107,11 +84,7 @@ export class DevBgScraper extends BaseScraper {
       
       if (!response.success || !response.html) {
         this.logger.warn(`Failed to fetch job details from ${jobUrl}: ${response.error || 'No content'}`);
-        return { 
-          description: '', 
-          requirements: '',
-          rawHtml: '',
-        };
+        return this.buildEmptyJobDetails();
       }
       
       const jobDetails = this.jobParserService.parseJobDetailsFromHtml(response.html);
@@ -129,11 +102,7 @@ export class DevBgScraper extends BaseScraper {
 
     } catch (error) {
       this.logger.warn(`Failed to fetch job details from ${jobUrl}:`, error.message);
-      return { 
-        description: '', 
-        requirements: '',
-        rawHtml: '',
-      };
+      return this.buildEmptyJobDetails();
     }
   }
 
@@ -292,18 +261,4 @@ export class DevBgScraper extends BaseScraper {
     return pageNumbers.some(num => num > currentPage);
   }
 
-  private createEmptyResult(page: number, startTime: number, url: string): ScrapingResult {
-    return {
-      jobs: [],
-      totalFound: 0,
-      page,
-      hasNextPage: false,
-      errors: [],
-      metadata: {
-        processingTime: Date.now() - startTime,
-        sourceUrl: url,
-        requestCount: 1,
-      },
-    };
-  }
 }

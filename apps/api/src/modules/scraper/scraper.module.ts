@@ -25,6 +25,11 @@ import { BrowserEngineService } from './services/browser-engine.service';
 import { PaidScraperService } from './services/paid-scraper.service';
 import { CreditTrackerService } from './services/credit-tracker.service';
 
+// Orchestration and parsing services
+import { ScrapingOrchestratorService } from './services/scraping-orchestrator.service';
+import { AntiBypassService } from './services/anti-bypass.service';
+import { JobsBgParsingService } from './services/jobs-bg-parsing.service';
+
 // Controllers
 import { ScraperController } from './scraper.controller';
 import { ScraperMonitoringController } from './controllers/scraper-monitoring.controller';
@@ -71,6 +76,11 @@ import paidServicesConfig from '../../config/paid-services.config';
     // === Paid Scraping Services ===
     PaidScraperService,
     CreditTrackerService,
+
+    // === Orchestration Services ===
+    ScrapingOrchestratorService,
+    AntiBypassService,
+    JobsBgParsingService,
 
     // === Scrapers ===
     DevBgScraper,

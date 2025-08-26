@@ -222,7 +222,7 @@ export class CreditTrackerService {
   /**
    * Check limits and send alerts if thresholds are exceeded
    */
-  private async checkLimitsAndAlert(service: string, currentUsage: number): Promise<void> {
+  private async checkLimitsAndAlert(service: string, _currentUsage: number): Promise<void> {
     const percentage = await this.getUsagePercentage(service);
     const thresholds = this.configService.get('paidServices.creditTracking.alertThresholds');
     

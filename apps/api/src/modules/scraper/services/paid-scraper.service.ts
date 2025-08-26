@@ -3,10 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AxiosResponse } from 'axios';
+import axios from 'axios';
 import {
   PaidScrapingOptions,
   PaidScrapingResponse,
-  ScraperAPIResponse,
   ScrapingDogResponse,
 } from '../interfaces/paid-scraper.interface';
 
@@ -124,7 +124,7 @@ export class PaidScraperService {
           if (errorResponse.error) {
             throw new Error(`ScraperAPI error: ${errorResponse.error}`);
           }
-        } catch (parseError) {
+        } catch (_parseError) {
           // If it's not valid JSON, treat as HTML
         }
       }
@@ -163,7 +163,7 @@ export class PaidScraperService {
         }
       }
       
-      this.logger.error(`ScraperAPI REST failed for ${options.url}: ${error.message}`);
+      this.logger.error(`ScraperAPI REST failed for ${options.url} after ${processingTime}ms: ${error.message}`);
       throw error;
     }
   }
@@ -179,7 +179,6 @@ export class PaidScraperService {
       this.logger.log(`Using ScraperAPI Proxy for ${options.url}`);
 
       // Use axios directly with proxy configuration
-      const axios = require('axios');
       const response = await axios.get(options.url, {
         method: 'GET',
         timeout: options.timeout ?? config.timeout,

@@ -88,8 +88,23 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
     // Check if we have an existing session
     if (this.sessions.has(sessionId)) {
       const session = this.sessions.get(sessionId)!;
-      session.lastActivity = new Date();
-      return session;
+      
+      // Validate session before returning
+      if (this.isSessionValid(session)) {
+        session.lastActivity = new Date();
+        return session;
+      } else {
+        // Session is invalid, remove and recreate
+        this.logger.warn(`Session ${sessionId} is invalid, recreating...`);
+        this.sessions.delete(sessionId);
+        
+        // Try to close the invalid session gracefully
+        try {
+          await session.context.close();
+        } catch (error) {
+          this.logger.debug(`Failed to close invalid session context: ${error.message}`);
+        }
+      }
     }
 
     // Create new session
@@ -97,29 +112,74 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
   }
 
   /**
+   * Check if session is still valid and active
+   */
+  private isSessionValid(session: IBrowserSession): boolean {
+    try {
+      // Check if context and page are still connected
+      return !session.context.browser()?.isConnected() === false && 
+             !session.page.isClosed();
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Safely execute page operations with connection checks
+   */
+  private async safePageOperation<T>(session: IBrowserSession, operation: () => Promise<T>, operationName: string): Promise<T | null> {
+    if (!this.isSessionValid(session)) {
+      this.logger.warn(`Session ${session.id} invalid for ${operationName}, skipping operation`);
+      return null;
+    }
+
+    try {
+      return await operation();
+    } catch (error) {
+      if (error.message.includes('Target page, context or browser has been closed') ||
+          error.message.includes('browser has been closed') ||
+          error.message.includes('context has been closed')) {
+        this.logger.warn(`Session ${session.id} closed during ${operationName}: ${error.message}`);
+        // Remove invalid session from our tracking
+        this.sessions.delete(session.id);
+        return null;
+      }
+      throw error; // Re-throw non-connection errors
+    }
+  }
+
+  /**
    * Fetch a page using browser automation with optional stealth and infinite scroll
    */
   async fetchPage(url: string, session: IBrowserSession, options?: { infiniteScroll?: boolean; stealth?: boolean; warmup?: boolean }): Promise<BrowserScrapingResponse> {
+    // Validate session before any operations
+    if (!this.isSessionValid(session)) {
+      this.logger.error(`Session ${session.id} is invalid, cannot fetch page`);
+      throw new Error(`Browser session ${session.id} is no longer valid`);
+    }
+
     // If stealth mode is enabled, perform enhanced behavior
     if (options?.stealth) {
-      try {
-        // Skip warm-up navigation (causes detection) but simulate realistic referrer chain
-        if (!options.warmup) {
-          // Simulate coming from Google search
+      // Skip warm-up navigation (causes detection) but simulate realistic referrer chain
+      if (!options.warmup) {
+        // Simulate coming from Google search with safe operation
+        await this.safePageOperation(session, async () => {
           await session.page.setExtraHTTPHeaders({
             'Referer': 'https://www.google.com/search?q=java+jobs+bulgaria',
             'Sec-Fetch-Site': 'cross-site'
           });
-        }
+        }, 'setExtraHTTPHeaders');
+      }
         
         // Pre-navigation behavior simulation with longer delays
-        await this.simulateHumanBehavior(session.page);
+        await this.safePageOperation(session, async () => {
+          await this.simulateHumanBehavior(session.page);
+        }, 'simulateHumanBehavior');
         
         // Add longer random delay before navigation (DataDome bypass)
-        await session.page.waitForTimeout(Math.random() * 8000 + 5000);
-      } catch (error) {
-        this.logger.debug('Stealth behavior simulation error (non-critical):', error.message);
-      }
+        await this.safePageOperation(session, async () => {
+          await session.page.waitForTimeout(Math.random() * 8000 + 5000);
+        }, 'waitForTimeout');
     }
     const startTime = Date.now();
     
@@ -131,16 +191,20 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
       session.requestCount++;
 
       // Add random delay before navigation (human-like behavior) - longer for DataDome
-      await session.page.waitForTimeout(Math.random() * 5000 + 3000);
+      await this.safePageOperation(session, async () => {
+        await session.page.waitForTimeout(Math.random() * 5000 + 3000);
+      }, 'preNavigationDelay');
       
       // Navigate to page with realistic timing and enhanced stealth
-      const response = await session.page.goto(url, {
-        waitUntil: 'networkidle',  // Wait for network to be idle
-        timeout: session.config.timeout || 45000,  // Longer timeout for stealth
-      });
+      const response = await this.safePageOperation(session, async () => {
+        return await session.page.goto(url, {
+          waitUntil: 'networkidle',  // Wait for network to be idle
+          timeout: session.config.timeout || 45000,  // Longer timeout for stealth
+        });
+      }, 'pageNavigation');
 
       if (!response) {
-        throw new Error('No response received from page navigation');
+        throw new Error('Page navigation failed - session may have been closed');
       }
 
       // Wait for network to be idle with human-like timing

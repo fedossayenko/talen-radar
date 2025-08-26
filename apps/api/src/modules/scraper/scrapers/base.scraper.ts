@@ -41,6 +41,25 @@ export abstract class BaseScraper implements IJobScraper {
     ScraperConfigHelper.validateSiteConfiguration(configService, siteName);
   }
 
+  /**
+   * Load common scraper configuration from config service
+   */
+  protected loadScraperConfig(siteKey: string): {
+    baseUrl: string;
+    searchUrl: string;
+    maxPages: number;
+  } {
+    const baseUrl = this.configService.get<string>(`scraper.${siteKey}.baseUrl`) || 
+                   this.configService.get<string>(`scraper.sites.${siteKey}.baseUrl`);
+    const searchUrl = this.configService.get<string>(`scraper.${siteKey}.apiUrl`) ||
+                     this.configService.get<string>(`scraper.${siteKey}.searchUrl`) ||
+                     this.configService.get<string>(`scraper.sites.${siteKey}.searchUrl`);
+    const maxPages = this.configService.get<number>(`scraper.${siteKey}.maxPages`) ||
+                    this.configService.get<number>(`scraper.sites.${siteKey}.maxPages`, 10);
+    
+    return { baseUrl, searchUrl, maxPages };
+  }
+
 
   /**
    * Abstract methods that must be implemented by concrete scrapers
@@ -49,6 +68,80 @@ export abstract class BaseScraper implements IJobScraper {
   abstract fetchJobDetails(jobUrl: string, companyName?: string): Promise<JobDetails>;
   abstract getSiteConfig(): { name: string; baseUrl: string; supportedLocations: string[]; supportedCategories: string[] };
   abstract canHandle(url: string): boolean;
+
+  /**
+   * Apply job limit and log if limiting occurs
+   */
+  protected applyJobLimit(jobs: any[], limit?: number): any[] {
+    if (!limit || jobs.length <= limit) {
+      return jobs;
+    }
+    
+    this.logger.log(`Limiting results to ${limit} jobs (found ${jobs.length})`);
+    return jobs.slice(0, limit);
+  }
+
+  /**
+   * Build successful scraping result
+   */
+  protected buildSuccessResult(
+    jobs: any[],
+    page: number,
+    hasNextPage: boolean,
+    startTime: number,
+    sourceUrl: string,
+    requestCount: number = 1,
+    extraMetadata: any = {}
+  ): ScrapingResult {
+    return {
+      jobs,
+      totalFound: jobs.length,
+      page,
+      hasNextPage,
+      errors: [],
+      metadata: {
+        processingTime: Date.now() - startTime,
+        sourceUrl,
+        requestCount,
+        ...extraMetadata,
+      },
+    };
+  }
+
+  /**
+   * Build error scraping result
+   */
+  protected buildErrorResult(
+    page: number,
+    startTime: number,
+    sourceUrl: string,
+    error: string,
+    requestCount: number = 1
+  ): ScrapingResult {
+    return {
+      jobs: [],
+      totalFound: 0,
+      page,
+      hasNextPage: false,
+      errors: [error],
+      metadata: {
+        processingTime: Date.now() - startTime,
+        sourceUrl,
+        requestCount,
+      },
+    };
+  }
+
+  /**
+   * Build empty job details for error cases
+   */
+  protected buildEmptyJobDetails(): JobDetails {
+    return { 
+      description: '', 
+      requirements: '',
+      rawHtml: '',
+    };
+  }
   
   /**
    * Protected methods for concrete scrapers to use
