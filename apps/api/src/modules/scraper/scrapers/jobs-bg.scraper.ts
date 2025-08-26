@@ -261,12 +261,12 @@ export class JobsBgScraper extends BaseScraper {
     
     // Add categories - using Java category 56 based on user's example
     if (keywords.includes('Java')) {
-      params.append('categories[0]', '56');
+      params.append('categories[]', '56');
     }
     
-    // Add technologies with indexed format
-    keywords.forEach((keyword, index) => {
-      params.append(`techs[${index}]`, keyword);
+    // Add technologies with empty bracket format to match working curl
+    keywords.forEach((keyword) => {
+      params.append('techs[]', keyword);
     });
     
     // Add location if specified
@@ -499,59 +499,61 @@ export class JobsBgScraper extends BaseScraper {
    * Fixed to prevent false positives from legitimate DataDome scripts in CSP headers
    */
   private isCaptchaOrBlocked(html: string): boolean {
-    const indicators = [
-      // DataDome specific blocking indicators (not just script references)
+    const htmlLower = html.toLowerCase();
+    
+    // Check for legitimate job content first
+    const hasJobContent = htmlLower.includes('mdc-card') && 
+      (htmlLower.includes('job') || htmlLower.includes('position') || htmlLower.includes('vacancy'));
+    
+    // If we have legitimate job content and substantial HTML, don't consider it blocked
+    if (hasJobContent && html.length > 50000) {
+      this.logger.debug(`Found legitimate job content: ${html.length} chars, has job cards`);
+      return false;
+    }
+    
+    // Only check for actual blocking indicators (not just any mention in text)
+    const blockingIndicators = [
+      // DataDome active blocking pages (not CSP references)
       'datadome.co/captcha',
-      'dd.captcha-delivery.com',
+      'dd.captcha-delivery.com/captcha',
       'captcha-delivery.com/interstitial',
-      'geo.captcha-delivery.com',
       'DataDome Captcha',
       'DataDome Device Check',
       'Just a moment',
       'Verifying your browser',
-      'dd_cookie_test',
       'Challenge solved',
       'DataDome protection',
       
-      // Generic bot protection
+      // Actual CAPTCHA challenge pages  
       'Please complete the security check',
       'Access Denied',
-      'captcha',
-      'hcaptcha',
-      'recaptcha',
       'Please verify you are a human',
       'Security Check',
       'Bot Protection',
       
-      // CloudFlare
-      'cloudflare',
-      'cf-ray',
+      // CloudFlare blocking pages
       'Please wait while we check your browser',
       
-      // Generic blocking indicators
-      'blocked',
+      // Direct access denial
       'forbidden',
-      'rate limit',
+      'rate limit exceeded',
     ];
     
-    const htmlLower = html.toLowerCase();
-    const hasIndicator = indicators.some(indicator => htmlLower.includes(indicator));
+    const hasBlockingIndicator = blockingIndicators.some(indicator => htmlLower.includes(indicator));
     
-    // Improved minimal content detection
-    const hasMinimalContent = html.length < 500 && 
-      !htmlLower.includes('mdc-card') && 
-      !htmlLower.includes('job');
+    // Minimal content detection
+    const hasMinimalContent = html.length < 500;
     
-    // Debug logging to help diagnose false positives
-    if (hasIndicator || hasMinimalContent) {
-      this.logger.debug(`Potential blocking detected: htmlLength=${html.length}, hasIndicator=${hasIndicator}, hasMinimalContent=${hasMinimalContent}`);
-      if (hasIndicator) {
-        const foundIndicators = indicators.filter(indicator => htmlLower.includes(indicator));
-        this.logger.debug(`Found indicators: ${foundIndicators.join(', ')}`);
+    // Debug logging
+    if (hasBlockingIndicator || hasMinimalContent) {
+      this.logger.debug(`Potential blocking detected: htmlLength=${html.length}, hasBlockingIndicator=${hasBlockingIndicator}, hasMinimalContent=${hasMinimalContent}, hasJobContent=${hasJobContent}`);
+      if (hasBlockingIndicator) {
+        const foundIndicators = blockingIndicators.filter(indicator => htmlLower.includes(indicator));
+        this.logger.debug(`Found blocking indicators: ${foundIndicators.join(', ')}`);
       }
     }
     
-    return hasIndicator || hasMinimalContent;
+    return hasBlockingIndicator || hasMinimalContent;
   }
 
   private createEmptyResult(page: number, startTime: number, url: string): ScrapingResult {

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { AxiosResponse } from 'axios';
 import {
   PaidScrapingOptions,
   PaidScrapingResponse,
@@ -61,37 +62,46 @@ export class PaidScraperService {
     try {
       this.logger.log(`Using ScraperAPI for ${options.url}`);
       
-      const params = new URLSearchParams({
-        api_key: config.apiKey,
-        url: options.url,
-        render: (options.render ?? config.requestParams.render).toString(),
-        format: 'html',
-        country_code: options.countryCode ?? config.requestParams.country_code,
-        premium: (options.premium ?? config.requestParams.premium).toString(),
-        session_number: config.requestParams.session_number.toString(),
-        timeout: (options.timeout ?? config.timeout).toString(),
-      });
+      // Build URL manually to match the working format from user's test
+      // Double-encode brackets to match ScraperAPI's expected format
+      const encodedUrl = encodeURIComponent(options.url)
+        .replace(/%5B/g, '%255B')  // Double-encode [
+        .replace(/%5D/g, '%255D'); // Double-encode ]
+      const requestUrl = `${config.baseUrl}/?api_key=${config.apiKey}&url=${encodedUrl}&device_type=desktop&premium=true&render=true&wait=5000`;
+      
+      this.logger.log(`ScraperAPI Request URL: ${requestUrl}`);
 
-      const response = await firstValueFrom(
-        this.httpService.get(`${config.baseUrl}/?${params.toString()}`, {
+      const response: AxiosResponse<any> = await firstValueFrom(
+        this.httpService.get(requestUrl, {
           timeout: options.timeout ?? config.timeout,
           headers: {
             'User-Agent': 'TalentRadar-API/1.0',
           },
+          responseType: 'text', // Expect plain HTML, not JSON
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
         })
       );
 
-      const apiResponse = response.data as ScraperAPIResponse;
       const processingTime = Date.now() - startTime;
 
       // Calculate credits used based on site
       const credits = this.calculateCredits(options.siteName, 'scraperapi');
 
-      if (apiResponse.error) {
-        throw new Error(`ScraperAPI error: ${apiResponse.error}`);
+      // ScraperAPI returns plain HTML for successful requests
+      const html = typeof response.data === 'string' ? response.data : String(response.data);
+      
+      // Check if we got an error response (would be JSON)
+      if (html.trim().startsWith('{') || html.trim().startsWith('[')) {
+        try {
+          const errorResponse = JSON.parse(html);
+          if (errorResponse.error) {
+            throw new Error(`ScraperAPI error: ${errorResponse.error}`);
+          }
+        } catch (parseError) {
+          // If it's not valid JSON, treat as HTML
+        }
       }
-
-      const html = typeof response.data === 'string' ? response.data : apiResponse.content || '';
       
       if (!html || html.length < 100) {
         throw new Error('ScraperAPI returned empty or minimal content');
@@ -107,7 +117,7 @@ export class PaidScraperService {
         processingTime,
         metadata: {
           originalUrl: options.url,
-          finalUrl: apiResponse.url || options.url,
+          finalUrl: options.url, // ScraperAPI doesn't provide final URL in plain HTML response
           statusCode: response.status,
           responseHeaders: response.headers as Record<string, string>,
         },
@@ -154,7 +164,7 @@ export class PaidScraperService {
         format: 'text',
       });
 
-      const response = await firstValueFrom(
+      const response: AxiosResponse<ScrapingDogResponse> = await firstValueFrom(
         this.httpService.get(`${config.baseUrl}/scrape?${params.toString()}`, {
           timeout: options.timeout ?? 180000,
           headers: {
