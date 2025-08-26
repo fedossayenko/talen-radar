@@ -54,6 +54,12 @@ export interface ScrapingResult {
     processingTime: number;
     sourceUrl: string;
     requestCount: number;
+    scrapingMethod?: 'free' | 'paid' | 'both_failed';
+    service?: string;
+    creditsUsed?: number;
+    attempts?: number;
+    fallbackReason?: string;
+    paidProcessingTime?: number;
   };
 }
 

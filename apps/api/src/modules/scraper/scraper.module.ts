@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { BullModule } from '@nestjs/bull';
+import { HttpModule } from '@nestjs/axios';
 
 // Services
 import { ScraperRegistryService } from './services/scraper-registry.service';
+import { ScraperService } from './scraper.service';
 
 // Scrapers
 import { DevBgScraper } from './scrapers/dev-bg.scraper';
@@ -18,12 +21,20 @@ import { HtmlCleanerService } from './services/html-cleaner.service';
 // Unified browser service
 import { BrowserEngineService } from './services/browser-engine.service';
 
+// Paid scraping services
+import { PaidScraperService } from './services/paid-scraper.service';
+import { CreditTrackerService } from './services/credit-tracker.service';
+
 // Controllers
 import { ScraperController } from './scraper.controller';
+import { ScraperMonitoringController } from './controllers/scraper-monitoring.controller';
 
 // External modules
 import { DatabaseModule } from '../../common/database/database.module';
+import { VacancyModule } from '../vacancy/vacancy.module';
+import { CompanyModule } from '../company/company.module';
 import scraperConfig from '../../config/scraper.config';
+import paidServicesConfig from '../../config/paid-services.config';
 
 /**
  * Simplified Scraper Module
@@ -36,17 +47,30 @@ import scraperConfig from '../../config/scraper.config';
 @Module({
   imports: [
     ConfigModule.forFeature(scraperConfig),
+    ConfigModule.forFeature(paidServicesConfig),
+    HttpModule,
     DatabaseModule,
+    VacancyModule,
+    CompanyModule,
+    BullModule.registerQueue({
+      name: 'scraper',
+    }),
   ],
   controllers: [
     ScraperController,
+    ScraperMonitoringController,
   ],
   providers: [
     // === Core Services ===
+    ScraperService,
     ScraperRegistryService,
 
-    // === Unified Browser Service ===
+    // === Browser Services ===
     BrowserEngineService,
+
+    // === Paid Scraping Services ===
+    PaidScraperService,
+    CreditTrackerService,
 
     // === Scrapers ===
     DevBgScraper,
@@ -60,8 +84,11 @@ import scraperConfig from '../../config/scraper.config';
     HtmlCleanerService,
   ],
   exports: [
+    ScraperService,
     ScraperRegistryService,
     BrowserEngineService,
+    PaidScraperService,
+    CreditTrackerService,
     ContentExtractorService,
     HtmlCleanerService,
   ],

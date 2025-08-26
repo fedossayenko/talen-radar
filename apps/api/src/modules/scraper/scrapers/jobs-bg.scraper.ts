@@ -11,6 +11,9 @@ import {
   JobDetails,
 } from '../interfaces/job-scraper.interface';
 import { BrowserEngineService } from '../services/browser-engine.service';
+import { PaidScraperService } from '../services/paid-scraper.service';
+import { CreditTrackerService } from '../services/credit-tracker.service';
+import { PaidScrapingOptions, CreditUsage } from '../interfaces/paid-scraper.interface';
 
 /**
  * Jobs.bg job scraper implementation
@@ -24,7 +27,9 @@ export class JobsBgScraper extends BaseScraper {
 
   constructor(
     configService: ConfigService,
-    protected readonly browserEngine: BrowserEngineService
+    protected readonly browserEngine: BrowserEngineService,
+    private readonly paidScraperService: PaidScraperService,
+    private readonly creditTrackerService: CreditTrackerService,
   ) {
     super(configService, 'jobs.bg', browserEngine);
     
@@ -38,79 +43,124 @@ export class JobsBgScraper extends BaseScraper {
   async scrapeJobs(options: ScraperOptions = {}): Promise<ScrapingResult> {
     const { page = 1, limit, keywords = ['Java'], location, experienceLevel } = options;
     const startTime = Date.now();
+    let totalRequestCount = 0;
     
     this.logger.log(`Starting to scrape jobs from jobs.bg - Page ${page}${limit ? ` (limit: ${limit})` : ''}`);
     
-    try {
-      const url = this.buildSearchUrl(page, keywords, location, experienceLevel);
-      this.logger.log(`Fetching HTML from: ${url}`);
-      
-      // Use stealth browser with enhanced DataDome bypass techniques
-      const response = await this.fetchWithStealthBrowser(url, { infiniteScroll: true, warmup: true });
-      
-      // Save raw HTML response to file for debugging
-      if (response.html) {
-        await this.saveResponseToFile(response.html, page);
-      }
-      
-      if (!response.success || !response.html) {
-        this.logger.warn(`Failed to fetch HTML from jobs.bg for page ${page}: ${response.error || 'No content'}`);
-        return this.createEmptyResult(page, startTime, url);
-      }
+    const url = this.buildSearchUrl(page, keywords, location, experienceLevel);
+    this.logger.log(`Target URL: ${url}`);
+    
+    // Get retry configuration
+    const retryConfig = this.configService.get('paidServices.retry', {
+      maxAttempts: 3,
+      baseDelayMs: 10000,
+      exponentialBase: 3,
+      jitterMs: 2000,
+    });
+    
+    let lastError: string | null = null;
+    
+    // Try free scraping with retries first
+    for (let attempt = 1; attempt <= retryConfig.maxAttempts; attempt++) {
+      try {
+        this.logger.log(`🆓 Free scraping attempt ${attempt}/${retryConfig.maxAttempts}`);
+        totalRequestCount++;
+        
+        // Use stealth browser with enhanced DataDome bypass techniques
+        const response = await this.fetchWithStealthBrowser(url, { infiniteScroll: true, warmup: false });
+        
+        // Save raw HTML response to file for debugging
+        if (response.html) {
+          await this.saveResponseToFile(response.html, page);
+        }
+        
+        if (!response.success || !response.html) {
+          throw new Error(response.error || 'No content received');
+        }
 
-      // Check for DataDome protection before parsing
-      if (this.isCaptchaOrBlocked(response.html)) {
+        // Check for DataDome protection
+        if (this.isCaptchaOrBlocked(response.html)) {
+          throw new Error('DataDome protection detected - blocked by anti-bot system');
+        }
+
+        // Success! Parse and return results
+        const jobs = await this.parseJobsFromHtml(response.html, page);
+        
+        // Apply limit if specified
+        const limitedJobs = limit && jobs.length > limit ? jobs.slice(0, limit) : jobs;
+        
+        if (limit && jobs.length > limit) {
+          this.logger.log(`Limiting results to ${limit} jobs (found ${jobs.length})`);
+        }
+        
+        // Check if there are more pages
+        const hasNextPage = this.hasNextPage(response.html, page);
+        
+        this.logger.log(`✅ Free scraping succeeded on attempt ${attempt} - found ${limitedJobs.length} jobs`);
+        
         return {
-          jobs: [],
-          totalFound: 0,
+          jobs: limitedJobs,
+          totalFound: limitedJobs.length,
           page,
-          hasNextPage: false,
-          errors: ['Jobs.bg is blocking automated access with DataDome protection. Consider using proxy rotation or manual access.'],
+          hasNextPage,
+          errors: [],
           metadata: {
             processingTime: Date.now() - startTime,
             sourceUrl: url,
-            requestCount: 1,
+            requestCount: totalRequestCount,
+            scrapingMethod: 'free',
+            attempts: attempt,
           },
         };
-      }
 
-      const jobs = await this.parseJobsFromHtml(response.html, page);
-      
-      // Apply limit if specified
-      const limitedJobs = limit && jobs.length > limit ? jobs.slice(0, limit) : jobs;
-      
-      if (limit && jobs.length > limit) {
-        this.logger.log(`Limiting results to ${limit} jobs (found ${jobs.length})`);
+      } catch (error) {
+        lastError = error.message;
+        this.logger.warn(`❌ Free scraping attempt ${attempt} failed: ${error.message}`);
+        
+        // If not the last attempt, wait before retrying
+        if (attempt < retryConfig.maxAttempts) {
+          const delay = retryConfig.baseDelayMs * Math.pow(retryConfig.exponentialBase, attempt - 1) + 
+                       Math.random() * retryConfig.jitterMs;
+          
+          this.logger.log(`⏳ Waiting ${Math.round(delay/1000)}s before retry...`);
+          await this.sleep(delay);
+        }
       }
-      
-      // Check if there are more pages
-      const hasNextPage = this.hasNextPage(response.html, page);
-      
-      return {
-        jobs: limitedJobs,
-        totalFound: limitedJobs.length,
+    }
+    
+    // All free attempts failed - try paid service fallback
+    this.logger.warn(`🆓 All free scraping attempts failed. Trying paid service fallback...`);
+    
+    try {
+      return await this.scrapeWithPaidFallback(url, {
         page,
-        hasNextPage,
-        errors: [],
-        metadata: {
-          processingTime: Date.now() - startTime,
-          sourceUrl: url,
-          requestCount: 1,
-        },
-      };
-
-    } catch (error) {
-      this.logger.error(`Failed to scrape jobs.bg jobs for page ${page}:`, error.message);
+        limit,
+        keywords,
+        location,
+        experienceLevel,
+        startTime,
+        totalRequestCount,
+        lastError,
+      });
+      
+    } catch (paidError) {
+      this.logger.error(`💳 Paid scraping also failed: ${paidError.message}`);
+      
       return {
         jobs: [],
         totalFound: 0,
         page,
         hasNextPage: false,
-        errors: [error.message],
+        errors: [
+          `Free scraping failed after ${retryConfig.maxAttempts} attempts: ${lastError}`,
+          `Paid scraping failed: ${paidError.message}`,
+        ],
         metadata: {
           processingTime: Date.now() - startTime,
-          sourceUrl: this.searchUrl,
-          requestCount: 1,
+          sourceUrl: url,
+          requestCount: totalRequestCount + 1, // +1 for paid attempt
+          scrapingMethod: 'both_failed',
+          attempts: retryConfig.maxAttempts,
         },
       };
     }
@@ -120,8 +170,57 @@ export class JobsBgScraper extends BaseScraper {
     try {
       this.logger.log(`Fetching job details from: ${jobUrl}`);
       
-      // Use browser automation for job details as well
-      const response = await this.fetchPage(jobUrl, { forceBrowser: true });
+      // Try free scraping first with single attempt
+      let response = await this.fetchPage(jobUrl, { forceBrowser: true });
+      
+      // If free scraping fails and we have credits, use paid service
+      if (!response.success || !response.html || this.isCaptchaOrBlocked(response.html)) {
+        this.logger.log(`Free fetch failed for job details, trying paid service...`);
+        
+        const requiredCredits = this.creditTrackerService.getCreditCost('jobs.bg', 'scraperapi');
+        const hasCredits = await this.creditTrackerService.hasAvailableCredits('scraperapi', requiredCredits);
+        
+        if (hasCredits) {
+          try {
+            const paidOptions: PaidScrapingOptions = {
+              url: jobUrl,
+              siteName: 'jobs.bg',
+              render: true,
+              premium: true,
+              countryCode: 'bg',
+              timeout: 180000,
+            };
+            
+            const paidResponse = await this.paidScraperService.scrapeWithScraperAPI(paidOptions);
+            
+            if (paidResponse.success && paidResponse.html) {
+              // Track credit usage
+              await this.creditTrackerService.trackUsage({
+                service: 'scraperapi',
+                site: 'jobs.bg',
+                credits: paidResponse.credits,
+                url: jobUrl,
+                timestamp: new Date(),
+                successful: true,
+              });
+              
+              response = {
+                html: paidResponse.html,
+                success: true,
+                finalUrl: jobUrl,
+                status: 200,
+                headers: {},
+                loadTime: paidResponse.processingTime,
+                cookies: [],
+              };
+              
+              this.logger.log(`✅ Paid job details fetch succeeded (${paidResponse.credits} credits used)`);
+            }
+          } catch (paidError) {
+            this.logger.warn(`Paid job details fetch failed: ${paidError.message}`);
+          }
+        }
+      }
       
       if (!response.success || !response.html) {
         this.logger.warn(`Failed to fetch job details from ${jobUrl}: ${response.error || 'No content'}`);
@@ -397,14 +496,22 @@ export class JobsBgScraper extends BaseScraper {
 
   /**
    * Enhanced DataDome and anti-bot protection detection
+   * Fixed to prevent false positives from legitimate DataDome scripts in CSP headers
    */
   private isCaptchaOrBlocked(html: string): boolean {
     const indicators = [
-      // DataDome specific
-      'captcha-delivery.com',
-      'datadome',
+      // DataDome specific blocking indicators (not just script references)
+      'datadome.co/captcha',
+      'dd.captcha-delivery.com',
+      'captcha-delivery.com/interstitial',
+      'geo.captcha-delivery.com',
+      'DataDome Captcha',
+      'DataDome Device Check',
+      'Just a moment',
+      'Verifying your browser',
       'dd_cookie_test',
       'Challenge solved',
+      'DataDome protection',
       
       // Generic bot protection
       'Please complete the security check',
@@ -430,8 +537,19 @@ export class JobsBgScraper extends BaseScraper {
     const htmlLower = html.toLowerCase();
     const hasIndicator = indicators.some(indicator => htmlLower.includes(indicator));
     
-    // Additional checks for minimal content (possible blocking)
-    const hasMinimalContent = html.length < 1000 && !htmlLower.includes('mdc-card');
+    // Improved minimal content detection
+    const hasMinimalContent = html.length < 500 && 
+      !htmlLower.includes('mdc-card') && 
+      !htmlLower.includes('job');
+    
+    // Debug logging to help diagnose false positives
+    if (hasIndicator || hasMinimalContent) {
+      this.logger.debug(`Potential blocking detected: htmlLength=${html.length}, hasIndicator=${hasIndicator}, hasMinimalContent=${hasMinimalContent}`);
+      if (hasIndicator) {
+        const foundIndicators = indicators.filter(indicator => htmlLower.includes(indicator));
+        this.logger.debug(`Found indicators: ${foundIndicators.join(', ')}`);
+      }
+    }
     
     return hasIndicator || hasMinimalContent;
   }
@@ -452,25 +570,78 @@ export class JobsBgScraper extends BaseScraper {
   }
 
   /**
-   * Fetch page using stealth browser with enhanced evasion
+   * Fetch page using mobile headful browser with extreme DataDome evasion
    */
   private async fetchWithStealthBrowser(url: string, options?: { infiniteScroll?: boolean, warmup?: boolean }) {
     try {
-      // Get browser session with stealth mode enabled
+      this.logger.log('🔥 JOBS.BG EXTREME BYPASS MODE: Mobile + Headful + Ultra-Slow');
+      
+      // EXTREME DataDome bypass: Mobile + Headful + Ultra-slow timing
       const session = await this.browserEngine.getSession({
         siteName: 'jobs.bg',
-        headless: true,
-        stealth: true, // Enable stealth mode for jobs.bg
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        viewport: { width: 1920, height: 1080 },
-        loadImages: false,
-        timeout: 45000,
+        headless: false, // 🚨 HEADFUL BROWSER - Most important change!
+        stealth: true,
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1', // Mobile user agent
+        viewport: { width: 375, height: 667 }, // iPhone viewport
+        loadImages: true,
+        timeout: 120000, // 2 minutes timeout
+      });
+      
+      // EXTREME MULTI-PHASE BYPASS STRATEGY
+      this.logger.log('📱 Phase 1: Mobile homepage visit (building trust)');
+      
+      // Phase 1: Visit mobile homepage and simulate real mobile user
+      await session.page.setExtraHTTPHeaders({
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+      });
+      
+      const homepageResponse = await this.browserEngine.fetchPage('https://www.jobs.bg', session, {
+        stealth: true,
+        warmup: false
+      });
+      
+      if (!homepageResponse.success) {
+        this.logger.warn('Homepage failed, but continuing...');
+      }
+      
+      // Phase 2: Simulate real mobile user behavior - scroll, wait, interact
+      this.logger.log('📱 Phase 2: Simulating mobile user interactions');
+      await session.page.evaluate(() => {
+        // Mobile-like scrolling
+        window.scrollTo(0, 100);
+        setTimeout(() => window.scrollTo(0, 200), 500);
+        setTimeout(() => window.scrollTo(0, 0), 1000);
+      });
+      
+      // ULTRA-LONG WAIT - DataDome bypass
+      this.logger.log('⏰ Phase 3: ULTRA-LONG WAIT (60+ seconds to build trust)');
+      const ultraWait = 60000 + Math.random() * 30000; // 60-90 seconds
+      this.logger.log(`Waiting ${Math.round(ultraWait/1000)} seconds...`);
+      await session.page.waitForTimeout(ultraWait);
+      
+      // Phase 4: Navigate to job search with mobile headers
+      this.logger.log('📱 Phase 4: Mobile job search navigation');
+      await session.page.setExtraHTTPHeaders({
+        'Referer': 'https://www.jobs.bg/',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-Mode': 'navigate', 
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-User': '?1',
+        'Cache-Control': 'max-age=0',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       });
 
-      // Use stealth browser with warm-up and behavior simulation
+      // Phase 5: Final navigation with mobile stealth
+      this.logger.log('📱 Phase 5: Final search page navigation');
       return await this.browserEngine.fetchPage(url, session, {
         ...options,
         stealth: true,
+        warmup: false
       });
       
     } catch (error) {
@@ -489,13 +660,119 @@ export class JobsBgScraper extends BaseScraper {
   }
 
   /**
+   * Fallback to paid scraping service when free methods fail
+   */
+  private async scrapeWithPaidFallback(url: string, context: {
+    page: number;
+    limit?: number;
+    keywords: string[];
+    location?: string;
+    experienceLevel?: string;
+    startTime: number;
+    totalRequestCount: number;
+    lastError: string | null;
+  }): Promise<ScrapingResult> {
+    const { page, limit, startTime, totalRequestCount, lastError } = context;
+    
+    // Check if paid scraping is enabled and we have credits
+    const requiredCredits = this.creditTrackerService.getCreditCost('jobs.bg', 'scraperapi');
+    const hasCredits = await this.creditTrackerService.hasAvailableCredits('scraperapi', requiredCredits);
+    
+    if (!hasCredits) {
+      const usagePercentage = await this.creditTrackerService.getUsagePercentage('scraperapi');
+      throw new Error(`Insufficient ScraperAPI credits. Current usage: ${usagePercentage.toFixed(1)}%. Required: ${requiredCredits} credits.`);
+    }
+    
+    this.logger.log(`💳 Using paid ScraperAPI (${requiredCredits} credits) for jobs.bg`);
+    
+    try {
+      const paidOptions: PaidScrapingOptions = {
+        url,
+        siteName: 'jobs.bg',
+        render: true,
+        premium: true,
+        countryCode: 'bg',
+        timeout: 180000, // 3 minutes for DataDome challenges
+      };
+      
+      const paidResponse = await this.paidScraperService.scrapeWithScraperAPI(paidOptions);
+      
+      if (!paidResponse.success || !paidResponse.html) {
+        throw new Error(`ScraperAPI failed: ${paidResponse.error || 'No content received'}`);
+      }
+      
+      // Track credit usage
+      await this.creditTrackerService.trackUsage({
+        service: 'scraperapi',
+        site: 'jobs.bg',
+        credits: paidResponse.credits,
+        url,
+        timestamp: new Date(),
+        successful: true,
+      });
+      
+      // Save response for debugging
+      await this.saveResponseToFile(paidResponse.html, page, 'paid');
+      
+      // Parse jobs from the paid response
+      const jobs = await this.parseJobsFromHtml(paidResponse.html, page);
+      
+      // Apply limit if specified
+      const limitedJobs = limit && jobs.length > limit ? jobs.slice(0, limit) : jobs;
+      
+      // Check if there are more pages
+      const hasNextPage = this.hasNextPage(paidResponse.html, page);
+      
+      this.logger.log(`✅ Paid scraping succeeded - found ${limitedJobs.length} jobs (${paidResponse.credits} credits used)`);
+      
+      return {
+        jobs: limitedJobs,
+        totalFound: limitedJobs.length,
+        page,
+        hasNextPage,
+        errors: [],
+        metadata: {
+          processingTime: Date.now() - startTime,
+          sourceUrl: url,
+          requestCount: totalRequestCount + 1,
+          scrapingMethod: 'paid',
+          service: 'scraperapi',
+          creditsUsed: paidResponse.credits,
+          fallbackReason: lastError,
+          paidProcessingTime: paidResponse.processingTime,
+        },
+      };
+      
+    } catch (error) {
+      // Track failed credit usage
+      await this.creditTrackerService.trackUsage({
+        service: 'scraperapi',
+        site: 'jobs.bg', 
+        credits: 0, // No credits charged for failures
+        url,
+        timestamp: new Date(),
+        successful: false,
+      });
+      
+      throw error;
+    }
+  }
+  
+  /**
+   * Sleep utility for retry delays
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
    * Save raw HTML response to file for debugging
    */
-  private async saveResponseToFile(html: string, page: number): Promise<string> {
+  private async saveResponseToFile(html: string, page: number, method: string = 'free'): Promise<string> {
     try {
       const debugDir = './debug-responses';
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `jobs-bg-page-${page}-${timestamp}.html`;
+      const filename = `jobs-bg-page-${page}-${method}-${timestamp}.html`;
       const filepath = join(debugDir, filename);
       
       // Ensure debug directory exists
