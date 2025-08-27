@@ -54,7 +54,7 @@ export class MockDataFactory {
 
   static createCompanyAnalysisData(companyId: string, overrides: Partial<any> = {}) {
     return {
-      companyId,
+      sourceSite: 'test',
       cultureScore: faker.number.float({ min: 1, max: 10, fractionDigits: 1 }),
       retentionRate: faker.number.float({ min: 70, max: 95, fractionDigits: 1 }),
       hiringProcess: JSON.stringify(faker.helpers.arrayElements([
@@ -76,6 +76,21 @@ export class MockDataFactory {
       careerGrowth: faker.number.float({ min: 1, max: 10, fractionDigits: 1 }),
       salaryCompetitiveness: faker.number.float({ min: 1, max: 10, fractionDigits: 1 }),
       benefitsScore: faker.number.float({ min: 1, max: 10, fractionDigits: 1 }),
+      techCulture: faker.number.float({ min: 1, max: 10, fractionDigits: 1 }),
+      overallScore: faker.number.float({ min: 1, max: 10, fractionDigits: 1 }),
+      pros: JSON.stringify(faker.helpers.arrayElements([
+        'Good work-life balance',
+        'Competitive salary',
+        'Modern tech stack',
+        'Learning opportunities',
+        'Great team culture',
+      ], { min: 2, max: 4 })),
+      cons: JSON.stringify(faker.helpers.arrayElements([
+        'Fast-paced environment',
+        'High expectations',
+        'Limited remote work',
+        'Competitive environment',
+      ], { min: 1, max: 3 })),
       analysisSource: 'ai_generated',
       confidenceScore: faker.number.float({ min: 0.5, max: 1, fractionDigits: 2 }),
       rawData: JSON.stringify({}),

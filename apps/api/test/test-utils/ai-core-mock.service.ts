@@ -7,7 +7,7 @@ import { Injectable, Logger } from '@nestjs/common';
 export class AICoreServiceMock {
   private readonly logger = new Logger('AICoreServiceMock');
 
-  async processText(request: any): Promise<any> {
+  async processText(_request: any): Promise<any> {
     this.logger.log('Mock AI processing text');
     
     return {
@@ -76,13 +76,13 @@ export class AICoreServiceMock {
     };
   }
 
-  async generateEmbedding(text: string): Promise<number[]> {
+  async generateEmbedding(_text: string): Promise<number[]> {
     this.logger.log('Mock generating embedding');
     // Return a mock embedding vector
     return Array.from({ length: 512 }, () => Math.random() - 0.5);
   }
 
-  async calculateSimilarity(embedding1: number[], embedding2: number[]): Promise<number> {
+  async calculateSimilarity(_embedding1: number[], _embedding2: number[]): Promise<number> {
     this.logger.log('Mock calculating similarity');
     return 0.75; // Mock similarity score
   }
@@ -108,7 +108,7 @@ export class AICoreServiceMock {
 export class AiRequestLoggerServiceMock {
   private readonly logger = new Logger('AiRequestLoggerServiceMock');
 
-  async logRequest(method: string, request: any, response?: any): Promise<void> {
+  async logRequest(method: string, _request: any, _response?: any): Promise<void> {
     this.logger.log(`Mock logging AI request: ${method}`);
   }
 

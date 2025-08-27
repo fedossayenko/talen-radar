@@ -181,8 +181,21 @@ describe('HealthService', () => {
       redisService.healthCheck.mockResolvedValue(true);
 
       const mockDbStats = {
-        tables: [{ name: 'users', count: 100 }],
-        connections: { total: 5, active: 2, idle: 3 },
+        tables: [{
+          schemaname: 'public',
+          tablename: 'users',
+          inserts: '100',
+          updates: '50',
+          deletes: '5',
+          live_tuples: '95',
+          dead_tuples: '5'
+        }],
+        connections: {
+          total_connections: '5',
+          active_connections: '2',
+          idle_connections: '3'
+        },
+        timestamp: new Date().toISOString(),
       };
       const mockRedisInfo = {
         server: { redis_version: '6.0.0' },
@@ -231,13 +244,21 @@ describe('HealthService', () => {
       prismaService.healthCheck.mockResolvedValue(true);
       redisService.healthCheck.mockResolvedValue(true);
 
-      prismaService.getStats.mockResolvedValue({ tables: [] });
+      prismaService.getStats.mockResolvedValue({ 
+        tables: [],
+        connections: [{ total_connections: 1, active_connections: 1, idle_connections: 0 }],
+        database_size: [{ size: '0 MB' }]
+      });
       redisService.getInfo.mockRejectedValue(new Error('Info failed'));
 
       const result = await service.getDetailedHealth();
 
       expect(result.status).toBe('ok');
-      expect(result.details.database).toEqual({ tables: [] });
+      expect(result.details.database).toEqual({ 
+        tables: [],
+        connections: [{ total_connections: 1, active_connections: 1, idle_connections: 0 }],
+        database_size: [{ size: '0 MB' }]
+      });
       expect(result.details.redis).toEqual({ error: 'Failed to get stats' });
     });
 
@@ -247,7 +268,7 @@ describe('HealthService', () => {
 
       // Mock process.memoryUsage to throw an error
       const originalMemoryUsage = process.memoryUsage;
-      process.memoryUsage = jest.fn().mockImplementation(() => {
+      (process.memoryUsage as unknown as jest.Mock) = jest.fn().mockImplementation(() => {
         throw new Error('Memory usage error');
       });
 
@@ -267,7 +288,11 @@ describe('HealthService', () => {
 
       prismaService.healthCheck.mockResolvedValue(true);
       redisService.healthCheck.mockResolvedValue(true);
-      prismaService.getStats.mockResolvedValue({ tables: [] });
+      prismaService.getStats.mockResolvedValue({ 
+        tables: [],
+        connections: [{ total_connections: 1, active_connections: 1, idle_connections: 0 }],
+        database_size: [{ size: '0 MB' }]
+      });
       redisService.getInfo.mockResolvedValue({ server: {} });
 
       const result = await service.getDetailedHealth();
@@ -291,7 +316,11 @@ describe('HealthService', () => {
 
       prismaService.healthCheck.mockResolvedValue(true);
       redisService.healthCheck.mockResolvedValue(true);
-      prismaService.getStats.mockResolvedValue({ tables: [] });
+      prismaService.getStats.mockResolvedValue({ 
+        tables: [],
+        connections: [{ total_connections: 1, active_connections: 1, idle_connections: 0 }],
+        database_size: [{ size: '0 MB' }]
+      });
       redisService.getInfo.mockResolvedValue({ server: {} });
 
       const result = await service.getDetailedHealth();
@@ -346,7 +375,15 @@ describe('HealthService', () => {
     });
 
     it('should get database stats and handle success', async () => {
-      const mockStats = { tables: [], connections: { total: 1 } };
+      const mockStats = { 
+        tables: [],
+        connections: {
+          total_connections: '1',
+          active_connections: '1',
+          idle_connections: '0'
+        },
+        timestamp: new Date().toISOString()
+      };
       prismaService.getStats.mockResolvedValue(mockStats);
 
       const result = await (service as any).getDatabaseStats();
@@ -394,7 +431,7 @@ describe('HealthService', () => {
 
       // Mock process.memoryUsage
       const originalMemoryUsage = process.memoryUsage;
-      process.memoryUsage = jest.fn().mockReturnValue(mockMemoryUsage);
+      (process.memoryUsage as unknown as jest.Mock) = jest.fn().mockReturnValue(mockMemoryUsage);
 
       const result = (service as any).getMemoryUsage();
 
@@ -420,7 +457,7 @@ describe('HealthService', () => {
       };
 
       const originalMemoryUsage = process.memoryUsage;
-      process.memoryUsage = jest.fn().mockReturnValue(mockMemoryUsage);
+      (process.memoryUsage as unknown as jest.Mock) = jest.fn().mockReturnValue(mockMemoryUsage);
 
       const result = (service as any).getMemoryUsage();
 
@@ -488,7 +525,11 @@ describe('HealthService', () => {
       redisService.healthCheck.mockResolvedValue(true);
 
       prismaService.getStats.mockImplementation(() =>
-        new Promise(resolve => setTimeout(() => resolve({ tables: [] }), 100))
+        new Promise(resolve => setTimeout(() => resolve({ 
+          tables: [],
+          connections: [{ total_connections: 1, active_connections: 1, idle_connections: 0 }],
+          database_size: [{ size: '0 MB' }]
+        }), 100))
       );
       redisService.getInfo.mockImplementation(() =>
         new Promise(resolve => setTimeout(() => resolve({ server: {} }), 120))

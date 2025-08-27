@@ -253,7 +253,10 @@ describe('CompanyController (e2e)', () => {
 
       // Create recent analysis
       const existingAnalysis = await prisma.companyAnalysis.create({
-        data: MockDataFactory.createCompanyAnalysisData(company.id),
+        data: {
+          ...MockDataFactory.createCompanyAnalysisData(company.id),
+          company: { connect: { id: company.id } }
+        }
       });
 
       // Act & Assert

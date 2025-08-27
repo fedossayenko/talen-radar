@@ -7,7 +7,7 @@ import { Injectable, Logger } from '@nestjs/common';
 export class BrowserEngineServiceMock {
   private readonly logger = new Logger('BrowserEngineServiceMock');
 
-  async scrapeUrl(url: string, options: any = {}): Promise<{ html: string; metadata: any }> {
+  async scrapeUrl(url: string, _options: any = {}): Promise<{ html: string; metadata: any }> {
     this.logger.log(`Mock scraping URL: ${url}`);
     
     // Return mock HTML content based on URL
@@ -117,7 +117,7 @@ export class CreditTrackerServiceMock {
     };
   }
 
-  async trackUsage(service: string, credits: number, metadata?: any): Promise<void> {
+  async trackUsage(service: string, credits: number, _metadata?: any): Promise<void> {
     this.logger.log(`Mock tracking usage: ${service}, credits: ${credits}`);
   }
 
@@ -199,7 +199,7 @@ export class JobsBgParsingServiceMock {
     };
   }
 
-  async parseJobListings(html: string): Promise<any[]> {
+  async parseJobListings(_html: string): Promise<any[]> {
     this.logger.log('Mock parsing job listings');
     
     return [
