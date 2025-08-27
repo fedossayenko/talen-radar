@@ -52,6 +52,10 @@ model Company {
   githubUrl        String?  // GitHub organization
   employeeCount    Int?     // Number of employees
   lastAnalyzedAt   DateTime? // When AI analysis was last performed
+  
+  // Cross-site duplicate detection fields
+  companyAliases   Json?    @db.JsonB // Array of all known company name variations
+  
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -65,6 +69,7 @@ model Company {
   @@index([size])
   @@index([location])
   @@index([lastAnalyzedAt])
+  @@index([companyAliases], map: "companies_aliases_gin_idx", type: Gin)
   // Full-text search indexes for PostgreSQL
   @@index([name, description], map: "companies_fulltext_name_desc_idx")
   @@map("companies")
@@ -189,6 +194,12 @@ model Vacancy {
   companySize          String?  // startup, small, medium, large, enterprise, not_specified
   applicationDeadline  DateTime? // Application deadline if specified
 
+  // Cross-site duplicate detection fields
+  externalIds          Json?    @db.JsonB // Site-specific job IDs: {"dev.bg": "job-123", "jobs.bg": "8102284"}
+  scrapedSites         Json?    @db.JsonB // Track all sites where job was found with timestamps
+  originalJobId        String?  // Original job ID from source site
+  lastSeenAt           Json?    @db.JsonB // Last seen timestamp for each site
+
   // Relations
   company      Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   scores       VacancyScore[]
@@ -210,6 +221,9 @@ model Vacancy {
   @@index([salaryMin, salaryMax])
   @@index([title])
   @@index([location])
+  @@index([originalJobId])
+  @@index([externalIds], map: "vacancies_external_ids_gin_idx", type: Gin)
+  @@index([scrapedSites], map: "vacancies_scraped_sites_gin_idx", type: Gin)
   // Full-text search indexes for PostgreSQL
   @@index([title, description], map: "vacancies_fulltext_title_desc_idx")
   @@index([requirements], map: "vacancies_requirements_gin_idx", type: Gin)

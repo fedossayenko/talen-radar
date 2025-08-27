@@ -146,4 +146,4 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
-        run: docker build -t talent-radar-api:test -f apps/api/Dockerfile .
+        run: docker build -t talent-radar-api:test -f docker/api/Dockerfile .

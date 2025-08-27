@@ -15,7 +15,7 @@ export class MockDataFactory {
     };
   }
 
-  static createVacancyData(companyId?: string, overrides: Partial<any> = {}) {
+  static createVacancyData(overrides: Partial<any> = {}) {
     const title = faker.helpers.arrayElement([
       'Senior Software Engineer',
       'Frontend Developer',
@@ -30,16 +30,20 @@ export class MockDataFactory {
     return {
       title,
       description: faker.lorem.paragraphs(3),
-      requirements: JSON.stringify(faker.helpers.arrayElements([
+      requirements: faker.helpers.arrayElements([
         'JavaScript', 'TypeScript', 'React', 'Node.js', 'Python', 'Java',
         'AWS', 'Docker', 'Kubernetes', 'PostgreSQL', 'MongoDB', 'Git',
-      ], { min: 3, max: 6 })),
-      location: faker.helpers.arrayElement(['Remote', 'San Francisco, CA', 'New York, NY', 'Seattle, WA', 'Austin, TX']),
-      salaryMin: faker.number.int({ min: 60000, max: 120000 }),
-      salaryMax: faker.number.int({ min: 120000, max: 200000 }),
-      experienceLevel: faker.helpers.arrayElement(['junior', 'mid', 'senior', 'lead', 'principal']),
-      employmentType: faker.helpers.arrayElement(['full-time', 'part-time', 'contract', 'internship']),
-      companyId: companyId || undefined,
+      ], { min: 3, max: 6 }),
+      technologies: faker.helpers.arrayElements([
+        'javascript', 'typescript', 'react', 'nodejs', 'python', 'java',
+        'aws', 'docker', 'kubernetes', 'postgresql', 'mongodb', 'git',
+      ], { min: 3, max: 6 }),
+      location: faker.helpers.arrayElement(['Remote', 'Sofia, Bulgaria', 'Plovdiv, Bulgaria', 'Varna, Bulgaria']),
+      salaryMin: faker.number.int({ min: 3000, max: 5000 }),
+      salaryMax: faker.number.int({ min: 5000, max: 8000 }),
+      salaryCurrency: 'BGN',
+      experienceLevel: faker.helpers.arrayElement(['Junior', 'Mid-level', 'Senior', 'Lead']),
+      employmentType: faker.helpers.arrayElement(['Full-time', 'Part-time', 'Contract']),
       sourceUrl: faker.internet.url(),
       sourceSite: faker.internet.domainName(),
       status: faker.helpers.arrayElement(['active', 'inactive', 'filled']),
@@ -50,7 +54,7 @@ export class MockDataFactory {
 
   static createCompanyAnalysisData(companyId: string, overrides: Partial<any> = {}) {
     return {
-      companyId,
+      sourceSite: 'test',
       cultureScore: faker.number.float({ min: 1, max: 10, fractionDigits: 1 }),
       retentionRate: faker.number.float({ min: 70, max: 95, fractionDigits: 1 }),
       hiringProcess: JSON.stringify(faker.helpers.arrayElements([
@@ -72,6 +76,21 @@ export class MockDataFactory {
       careerGrowth: faker.number.float({ min: 1, max: 10, fractionDigits: 1 }),
       salaryCompetitiveness: faker.number.float({ min: 1, max: 10, fractionDigits: 1 }),
       benefitsScore: faker.number.float({ min: 1, max: 10, fractionDigits: 1 }),
+      techCulture: faker.number.float({ min: 1, max: 10, fractionDigits: 1 }),
+      overallScore: faker.number.float({ min: 1, max: 10, fractionDigits: 1 }),
+      pros: JSON.stringify(faker.helpers.arrayElements([
+        'Good work-life balance',
+        'Competitive salary',
+        'Modern tech stack',
+        'Learning opportunities',
+        'Great team culture',
+      ], { min: 2, max: 4 })),
+      cons: JSON.stringify(faker.helpers.arrayElements([
+        'Fast-paced environment',
+        'High expectations',
+        'Limited remote work',
+        'Competitive environment',
+      ], { min: 1, max: 3 })),
       analysisSource: 'ai_generated',
       confidenceScore: faker.number.float({ min: 0.5, max: 1, fractionDigits: 2 }),
       rawData: JSON.stringify({}),
@@ -79,36 +98,69 @@ export class MockDataFactory {
     };
   }
 
-  static createCvData(overrides: Partial<any> = {}) {
+  static createCVData(overrides: Partial<any> = {}) {
     return {
+      candidateName: faker.person.fullName(),
+      email: faker.internet.email(),
+      phone: faker.phone.number(),
+      title: faker.helpers.arrayElement([
+        'Senior Java Developer',
+        'React Frontend Developer',
+        'Full Stack Developer',
+        'DevOps Engineer',
+        'Data Scientist'
+      ]),
+      summary: faker.lorem.paragraphs(2),
+      skills: faker.helpers.arrayElements([
+        'JavaScript', 'TypeScript', 'React', 'Node.js', 'Python', 'Java',
+        'AWS', 'Docker', 'Kubernetes', 'PostgreSQL', 'MongoDB', 'Git',
+      ], { min: 5, max: 10 }),
+      experience: [
+        {
+          company: faker.company.name(),
+          position: faker.person.jobTitle(),
+          startDate: faker.date.past({ years: 5 }).toISOString().split('T')[0],
+          endDate: faker.date.recent({ days: 365 }).toISOString().split('T')[0],
+          description: faker.lorem.paragraph(),
+        }
+      ],
+      education: [
+        {
+          institution: faker.helpers.arrayElement([
+            'Sofia University',
+            'Technical University of Sofia',
+            'Plovdiv University',
+            'New Bulgarian University'
+          ]),
+          degree: faker.helpers.arrayElement([
+            'Bachelor in Computer Science',
+            'Master of Software Engineering',
+            'Bachelor of Information Technology',
+            'Master of Computer Science',
+          ]),
+          startDate: faker.date.past({ years: 10 }).toISOString().split('T')[0],
+          endDate: faker.date.past({ years: 6 }).toISOString().split('T')[0],
+        }
+      ],
+      experienceLevel: faker.helpers.arrayElement(['Junior', 'Mid-level', 'Senior', 'Lead']),
+      yearsOfExperience: faker.number.int({ min: 1, max: 15 }),
       filename: faker.system.fileName({ extensionCount: 1 }) + '.pdf',
       originalName: faker.person.fullName() + '_CV.pdf',
       mimeType: 'application/pdf',
       size: faker.number.int({ min: 100000, max: 2000000 }),
       path: `/uploads/cv/${faker.string.uuid()}.pdf`,
-      extractedText: faker.lorem.paragraphs(10),
-      skills: JSON.stringify(faker.helpers.arrayElements([
-        'JavaScript', 'TypeScript', 'React', 'Node.js', 'Python', 'Java',
-        'AWS', 'Docker', 'Kubernetes', 'PostgreSQL', 'MongoDB', 'Git',
-      ], { min: 5, max: 10 })),
-      experience: faker.number.int({ min: 1, max: 15 }),
-      education: JSON.stringify(faker.helpers.arrayElements([
-        'Bachelor of Computer Science',
-        'Master of Software Engineering',
-        'Bachelor of Information Technology',
-        'Master of Computer Science',
-      ], { min: 1, max: 2 })),
       ...overrides,
     };
   }
 
-  static createApplicationData(vacancyId: string, cvId?: string, overrides: Partial<any> = {}) {
+  static createApplicationData(overrides: Partial<any> = {}) {
     return {
-      vacancyId,
-      cvId,
-      status: faker.helpers.arrayElement(['draft', 'applied', 'interview', 'rejected', 'offered', 'accepted']),
-      appliedAt: faker.date.recent({ days: 7 }),
+      applicantName: faker.person.fullName(),
+      applicantEmail: faker.internet.email(),
       coverLetter: faker.lorem.paragraphs(3),
+      resumeUrl: faker.internet.url(),
+      status: faker.helpers.arrayElement(['pending', 'applied', 'interview', 'approved', 'rejected', 'offered', 'accepted']),
+      appliedAt: faker.date.recent({ days: 7 }),
       notes: faker.lorem.paragraph(),
       ...overrides,
     };

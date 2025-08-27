@@ -1,23 +1,20 @@
 # TalentRadar API Dockerfile
 
-FROM node:22-alpine AS base
+FROM node:22-slim AS base
 
-# Install system dependencies
-RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
+# Install system dependencies for Playwright and enhanced xvfb support
+RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    gnupg \
     ca-certificates \
-    ttf-freefont \
-    curl
+    procps \
+    xvfb \
+    x11-utils \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set Playwright to use installed Chromium
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+# Install Playwright system dependencies
+RUN npx --yes playwright@1.54.2 install-deps chromium
 
 # Create app directory
 WORKDIR /app
@@ -38,13 +35,24 @@ FROM base AS development
 RUN npm ci
 RUN npm install -g @nestjs/cli
 
+# Install Playwright browsers
+RUN npx playwright install chromium --with-deps
+
 # Copy workspace source code
 COPY apps/ ./apps/
 COPY packages/ ./packages/
 
-# Copy and setup entrypoint script
+# Copy and setup entrypoint and xvfb wrapper scripts
 COPY docker/api/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY docker/api/xvfb-wrapper.sh /usr/local/bin/xvfb-wrapper.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/xvfb-wrapper.sh
+
+# Setup X11 directories and permissions for Xvfb
+RUN mkdir -p /tmp/.X11-unix \
+    && chmod 1777 /tmp/.X11-unix \
+    && mkdir -p /tmp/logs \
+    && chmod 755 /tmp/logs
 
 # Create data directory for SQLite
 RUN mkdir -p /app/data && chmod 755 /app/data
@@ -84,8 +92,8 @@ COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/package*.json ./apps/api/
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
+RUN groupadd -g 1001 nodejs
+RUN useradd -r -u 1001 -g nodejs nextjs
 
 # Change ownership
 RUN chown -R nextjs:nodejs /app

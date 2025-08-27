@@ -7,7 +7,7 @@ export class DatabaseHelper {
   static async initializeTestDatabase(): Promise<PrismaClient> {
     const workerId = process.env.JEST_WORKER_ID || '1';
     // Use PostgreSQL for tests with worker-specific database names
-    const databaseUrl = process.env.DATABASE_URL || `postgresql://postgres:password@localhost:5432/talent_radar_test_${workerId}`;
+    const databaseUrl = process.env.DATABASE_URL || `postgresql://postgres:dev_postgres_password_change_in_production@localhost:5432/talent_radar_test_${workerId}`;
 
     if (!this.prisma) {
       this.prisma = new PrismaClient({

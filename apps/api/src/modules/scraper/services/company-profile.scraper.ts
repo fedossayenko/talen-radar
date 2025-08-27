@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosResponse } from 'axios';
 import * as cheerio from 'cheerio';
-import { chromium, Browser, Page } from 'playwright';
 import { DevBgCompanyExtractor, DevBgCompanyData } from './devbg-company-extractor.service';
+import { BrowserEngineService } from './browser-engine.service';
 
 export interface CompanyProfileData {
   name: string;
@@ -45,7 +45,8 @@ export class CompanyProfileScraper {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly devBgExtractor: DevBgCompanyExtractor
+    private readonly devBgExtractor: DevBgCompanyExtractor,
+    private readonly browserEngine: BrowserEngineService
   ) {
     this.requestTimeout = this.configService.get<number>('scraper.devBg.requestTimeout', 30000);
     this.requestDelay = this.configService.get<number>('scraper.devBg.requestDelay', 2000);
@@ -534,51 +535,31 @@ export class CompanyProfileScraper {
   }
 
   /**
-   * Fetch page content using browser automation (Playwright)
+   * Fetch page content using unified browser engine
    */
   private async fetchPageWithBrowser(url: string): Promise<string | null> {
-    let browser: Browser | null = null;
-    let page: Page | null = null;
-
     try {
       this.logger.log(`Using browser automation to fetch: ${url}`);
       
-      browser = await chromium.launch({ 
+      const session = await this.browserEngine.getSession({
+        siteName: 'company-profile',
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        timeout: 30000,
       });
       
-      page = await browser.newPage();
+      const response = await this.browserEngine.fetchPage(url, session);
       
-      // Set reasonable timeouts
-      page.setDefaultTimeout(30000);
-      page.setDefaultNavigationTimeout(30000);
-      
-      // Navigate to the page
-      await page.goto(url, { 
-        waitUntil: 'networkidle',
-        timeout: 30000 
-      });
-      
-      // Wait a bit for any dynamic content to load
-      await page.waitForTimeout(2000);
-      
-      // Get the page content
-      const content = await page.content();
-      
-      this.logger.log(`Successfully fetched ${content.length} characters using browser automation`);
-      return content;
+      if (response.success) {
+        this.logger.log(`Successfully fetched ${response.html.length} characters using browser automation`);
+        return response.html;
+      } else {
+        this.logger.error(`Browser automation failed for ${url}: ${response.error}`);
+        return null;
+      }
       
     } catch (error) {
       this.logger.error(`Browser automation failed for ${url}:`, error.message);
       return null;
-    } finally {
-      if (page) {
-        try { await page.close(); } catch { /* ignore */ }
-      }
-      if (browser) {
-        try { await browser.close(); } catch { /* ignore */ }
-      }
     }
   }
 

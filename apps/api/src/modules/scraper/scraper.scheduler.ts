@@ -2,10 +2,34 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bull';
 import * as Bull from 'bull';
-import { AllJobData, AiExtractionJobData, BatchProcessingJobData } from './processors/scraper.processor';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { HashingUtil } from '../../common/utils/hashing.util';
+
+// Type definitions for job data
+
+interface AiExtractionJobData {
+  vacancyId?: string;
+  contentHash?: string;
+  content?: string;
+  sourceUrl?: string;
+  priority?: number;
+  retryCount?: number;
+  maxRetries?: number;
+  batchId?: string;
+}
+
+interface BatchProcessingJobData {
+  batchId?: string;
+  urls?: string[];
+  priority?: number;
+  options?: {
+    maxConcurrent?: number;
+    delayBetweenRequests?: number;
+    enableAiExtraction?: boolean;
+    qualityThreshold?: number;
+  };
+}
 
 @Injectable()
 export class ScraperScheduler {
@@ -13,7 +37,7 @@ export class ScraperScheduler {
 
   constructor(
     private readonly configService: ConfigService,
-    @InjectQueue('scraper') private readonly scraperQueue: Bull.Queue<AllJobData>,
+    @InjectQueue('scraper') private readonly scraperQueue: Bull.Queue<any>,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_2AM)

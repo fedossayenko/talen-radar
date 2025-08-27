@@ -1,10 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { AiService, CompanyProfileAnalysisResult, CompanyWebsiteAnalysisResult, ConsolidatedCompanyAnalysisResult } from './ai.service';
+import { AiService, CompanyProfileAnalysisResult } from './ai.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { RedisMockService } from '../../../test/test-utils/redis-mock.service';
 import { AiRequestLoggerService } from '../../common/ai-logging/ai-request-logger.service';
 import { ContentExtractorService } from '../scraper/services/content-extractor.service';
+import { AIVacancyService } from './services/ai-vacancy.service';
+import { AICompanyService } from './services/ai-company.service';
+import { AICoreService } from './services/ai-core.service';
+import { AIPromptService } from './services/ai-prompt.service';
 import OpenAI from 'openai';
 
 // Mock HashingUtil
@@ -90,8 +94,6 @@ describe('AiService - Company Analysis Methods', () => {
     technologies: ['JavaScript', 'TypeScript', 'React', 'Node.js'],
     benefits: ['Health insurance', 'Flexible hours', 'Remote work'],
     values: ['Innovation', 'Collaboration', 'Excellence'],
-    hiringProcess: ['Application review', 'Technical interview', 'HR interview', 'Offer'],
-    pros: ['Great tech stack', 'Good work-life balance', 'Learning opportunities'],
     cons: ['Fast-paced environment', 'High expectations'],
     cultureScore: 8.5,
     workLifeBalance: 8.0,
@@ -101,7 +103,7 @@ describe('AiService - Company Analysis Methods', () => {
     dataCompleteness: 90,
   };
 
-  const mockCompanyWebsiteAnalysis: CompanyWebsiteAnalysisResult = {
+  const mockCompanyWebsiteAnalysis: CompanyProfileAnalysisResult = {
     name: 'TechCorp Solutions',
     description: 'Leading software development company',
     industry: 'Software Development',
@@ -173,6 +175,56 @@ describe('AiService - Company Analysis Methods', () => {
                 language: 'en',
               },
             })),
+          },
+        },
+        {
+          provide: AIVacancyService,
+          useValue: {
+            extractVacancyData: jest.fn(),
+          },
+        },
+        AICompanyService,
+        {
+          provide: AICoreService,
+          useValue: {
+            processText: jest.fn(),
+            isHealthy: jest.fn().mockReturnValue(true),
+            generateContentHash: jest.fn().mockImplementation((content, options) => {
+              if (options?.sourceUrl === 'https://dev.bg/company/techcorp/' && content.includes('Company profile content')) {
+                return 'profile-hash-123';
+              }
+              if (options?.sourceUrl === 'https://techcorp.com/about' && content.includes('About TechCorp')) {
+                return 'website-hash-456';
+              }
+              return `test-hash-${content.length}`;
+            }),
+            getCachedResult: jest.fn().mockResolvedValue(null), // No cache by default
+            cleanContent: jest.fn().mockImplementation((content) => content.replace(/<[^>]*>/g, '')), // Simple HTML strip
+            assessContentQuality: jest.fn().mockResolvedValue({
+              qualityScore: 85,
+              hasStructuredData: true,
+              language: 'en'
+            }),
+            callOpenAI: jest.fn().mockImplementation((...args) => {
+              return mockOpenAI.chat.completions.create(...args);
+            }),
+          },
+        },
+        {
+          provide: AIPromptService,
+          useValue: {
+            buildCompanyProfileMessages: jest.fn().mockImplementation((_content, _sourceUrl, _existingData, _isUnstructured) => [
+              {
+                role: 'user',
+                content: `Company profile content about TechCorp`
+              }
+            ]),
+            buildCompanyWebsiteMessages: jest.fn().mockImplementation((_content, _sourceUrl, _existingData, _isUnstructured) => [
+              {
+                role: 'user', 
+                content: `About TechCorp website content`
+              }
+            ]),
           },
         },
       ],
@@ -320,6 +372,26 @@ describe('AiService - Company Analysis Methods', () => {
                   language: 'en',
                 },
               })),
+            },
+          },
+          {
+            provide: AIVacancyService,
+            useValue: {
+              extractVacancyData: jest.fn(),
+            },
+          },
+          {
+            provide: AICompanyService,
+            useValue: {
+              analyzeCompanyProfile: jest.fn(),
+              analyzeCompanyWebsite: jest.fn(),
+            },
+          },
+          {
+            provide: AICoreService,
+            useValue: {
+              processText: jest.fn(),
+              isHealthy: jest.fn().mockReturnValue(true),
             },
           },
         ],
@@ -601,7 +673,7 @@ describe('AiService - Company Analysis Methods', () => {
   describe('consolidateCompanyAnalysis', () => {
     const companyName = 'TechCorp';
 
-    const mockConsolidatedAnalysis: ConsolidatedCompanyAnalysisResult = {
+    const mockConsolidatedAnalysis = {
       name: 'TechCorp',
       description: 'Innovative technology company specializing in software development',
       industry: 'Technology',
@@ -614,8 +686,7 @@ describe('AiService - Company Analysis Methods', () => {
       benefits: ['Health insurance', 'Flexible hours', 'Remote work', 'Training budget', 'Team events'],
       values: ['Innovation', 'Collaboration', 'Excellence', 'Quality', 'Teamwork'],
       workEnvironment: 'Modern office with flexible working arrangements and great work-life balance',
-      hiringProcess: ['Application review', 'Technical interview', 'HR interview', 'Offer'],
-      growthOpportunities: ['Career advancement', 'Professional development', 'Learning opportunities'],
+        growthOpportunities: ['Career advancement', 'Professional development', 'Learning opportunities'],
       pros: ['Great tech stack', 'Good work-life balance', 'Learning opportunities', 'Modern tech stack', 'Professional development'],
       cons: ['Fast-paced environment', 'High expectations', 'Competitive environment'],
       interviewProcess: 'Standard technical and HR interview process',

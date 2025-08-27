@@ -55,6 +55,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production_use_long_random_string}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      # Paid Scraping Services
+      SCRAPERAPI_KEY: ${SCRAPERAPI_KEY}
+      ENABLE_PAID_SCRAPING: "true"
       LOG_LEVEL: debug
       PLAYWRIGHT_HEADLESS: true
       SCRAPER_CONCURRENCY: 3
@@ -92,13 +95,24 @@ services:
       METRICS_ENABLED: "true"
       HEALTH_CHECK_ENABLED: "true"
       # Scraper Limits
-      SCRAPER_MAX_VACANCIES: 1
+      SCRAPER_MAX_VACANCIES: 5
+      # Browser Configuration for Anti-Detection
+      SCRAPER_FORCE_HEADLESS: "false"
+      DISABLE_XVFB: "false"
+      # Enhanced Xvfb Configuration
+      XVFB_DISPLAY: 99
+      XVFB_RESOLUTION: "1920x1080x24"
+      XVFB_MAX_RETRIES: 3
+      XVFB_STARTUP_TIMEOUT: 5
+      XVFB_LOG_FILE: "/tmp/logs/xvfb.log"
+      XVFB_FALLBACK_HEADLESS: "true"
     ports:
       - "3001:3001"
       - "5555:5555"
     volumes:
       - ./apps/api/src:/app/apps/api/src:ro
       - ./packages:/app/packages:ro
+      - ./local-data/logs:/tmp/logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -117,8 +131,8 @@ services:
 
   web:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./docker/web/Dockerfile
       target: development
     container_name: talent-radar-web
     environment:

@@ -1,11 +1,11 @@
 import { TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { CompanyController } from './company.controller';
-import { CompanyService } from './company.service';
-import { TestModule } from '../../../test/test-utils/test.module';
-import { MockDataFactory } from '../../../test/test-utils/mock-data.factory';
-import { DatabaseHelper } from '../../../test/test-utils/database.helper';
+import { CompanyController } from '../../src/modules/company/company.controller';
+import { CompanyService } from '../../src/modules/company/company.service';
+import { TestModule } from '../test-utils/test.module';
+import { MockDataFactory } from '../test-utils/mock-data.factory';
+import { DatabaseHelper } from '../test-utils/database.helper';
 
 describe('CompanyController (e2e)', () => {
   let app: INestApplication;
@@ -253,7 +253,10 @@ describe('CompanyController (e2e)', () => {
 
       // Create recent analysis
       const existingAnalysis = await prisma.companyAnalysis.create({
-        data: MockDataFactory.createCompanyAnalysisData(company.id),
+        data: {
+          ...MockDataFactory.createCompanyAnalysisData(company.id),
+          company: { connect: { id: company.id } }
+        }
       });
 
       // Act & Assert

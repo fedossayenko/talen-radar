@@ -159,7 +159,7 @@ export class AiContractValidator {
   /**
    * Create JSON schema for vacancy extraction result
    */
-  private createVacancyExtractionSchema(): JSONSchemaType<VacancyExtractionResult> {
+  private createVacancyExtractionSchema(): any {
     return {
       type: 'object',
       required: [

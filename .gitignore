@@ -170,6 +170,10 @@ temp/
 scraped-data/
 *.json.backup
 
+# Debug files
+debug-responses/
+scraper-sessions/
+
 # Docker
 .dockerignore
 
