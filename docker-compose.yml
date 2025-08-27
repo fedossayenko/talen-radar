@@ -131,8 +131,8 @@ services:
 
   web:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./docker/web/Dockerfile
       target: development
     container_name: talent-radar-web
     environment:

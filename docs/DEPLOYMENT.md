@@ -111,7 +111,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: ./apps/api/Dockerfile
+      dockerfile: ./docker/api/Dockerfile
       target: development
     environment:
       NODE_ENV: development
@@ -130,7 +130,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: ./apps/web/Dockerfile
+      dockerfile: ./docker/web/Dockerfile
       target: development
     environment:
       NODE_ENV: development
@@ -147,7 +147,7 @@ services:
   scraper:
     build:
       context: .
-      dockerfile: ./apps/api/Dockerfile
+      dockerfile: ./docker/api/Dockerfile
       target: development
     environment:
       NODE_ENV: development
@@ -194,7 +194,7 @@ EOF
 
 2. **Add Dockerfiles**
 ```dockerfile
-# apps/api/Dockerfile
+# docker/api/Dockerfile
 FROM node:18-alpine AS base
 WORKDIR /app
 COPY package*.json ./
