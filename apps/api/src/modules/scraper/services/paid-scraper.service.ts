@@ -124,7 +124,7 @@ export class PaidScraperService {
           if (errorResponse.error) {
             throw new Error(`ScraperAPI error: ${errorResponse.error}`);
           }
-        } catch (_parseError) {
+        } catch {
           // If it's not valid JSON, treat as HTML
         }
       }

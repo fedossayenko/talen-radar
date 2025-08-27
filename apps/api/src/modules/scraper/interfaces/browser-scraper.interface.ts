@@ -74,6 +74,9 @@ export interface BrowserScrapingResponse {
     httpOnly?: boolean;
     secure?: boolean;
   }>;
+  
+  /** Additional metadata (service name, credits used, etc.) */
+  metadata?: Record<string, any>;
 }
 
 /**

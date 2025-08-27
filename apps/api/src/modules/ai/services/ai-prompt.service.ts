@@ -13,10 +13,10 @@ export class AIPromptService {
     content: string,
     sourceUrl?: string,
     existingData?: any,
-    isUnstructuredModel: boolean = false,
+    _isUnstructuredModel: boolean = false,
   ): any[] {
-    const systemPrompt = this.getVacancyExtractionSystemPrompt(isUnstructuredModel);
-    const userPrompt = this.buildVacancyUserPrompt(content, sourceUrl, existingData, isUnstructuredModel);
+    const systemPrompt = this.getVacancyExtractionSystemPrompt(_isUnstructuredModel);
+    const userPrompt = this.buildVacancyUserPrompt(content, sourceUrl, existingData, _isUnstructuredModel);
 
     return [
       { role: 'system', content: systemPrompt },
@@ -31,10 +31,10 @@ export class AIPromptService {
     content: string,
     sourceUrl?: string,
     existingData?: any,
-    isUnstructuredModel: boolean = false,
+    _isUnstructuredModel: boolean = false,
   ): any[] {
-    const systemPrompt = this.getCompanyProfileSystemPrompt(isUnstructuredModel);
-    const userPrompt = this.buildCompanyProfileUserPrompt(content, sourceUrl, existingData, isUnstructuredModel);
+    const systemPrompt = this.getCompanyProfileSystemPrompt(_isUnstructuredModel);
+    const userPrompt = this.buildCompanyProfileUserPrompt(content, sourceUrl, existingData, _isUnstructuredModel);
 
     return [
       { role: 'system', content: systemPrompt },
@@ -49,10 +49,10 @@ export class AIPromptService {
     content: string,
     sourceUrl?: string,
     existingData?: any,
-    isUnstructuredModel: boolean = false,
+    _isUnstructuredModel: boolean = false,
   ): any[] {
-    const systemPrompt = this.getCompanyWebsiteSystemPrompt(isUnstructuredModel);
-    const userPrompt = this.buildCompanyWebsiteUserPrompt(content, sourceUrl, existingData, isUnstructuredModel);
+    const systemPrompt = this.getCompanyWebsiteSystemPrompt(_isUnstructuredModel);
+    const userPrompt = this.buildCompanyWebsiteUserPrompt(content, sourceUrl, existingData, _isUnstructuredModel);
 
     return [
       { role: 'system', content: systemPrompt },
@@ -65,10 +65,10 @@ export class AIPromptService {
    */
   buildCompanyConsolidationMessages(
     consolidationInput: any,
-    isUnstructuredModel: boolean = false,
+    _isUnstructuredModel: boolean = false,
   ): any[] {
-    const systemPrompt = this.getCompanyConsolidationSystemPrompt(isUnstructuredModel);
-    const userPrompt = this.buildCompanyConsolidationUserPrompt(consolidationInput, isUnstructuredModel);
+    const systemPrompt = this.getCompanyConsolidationSystemPrompt(_isUnstructuredModel);
+    const userPrompt = this.buildCompanyConsolidationUserPrompt(consolidationInput, _isUnstructuredModel);
 
     return [
       { role: 'system', content: systemPrompt },
@@ -81,7 +81,7 @@ export class AIPromptService {
    */
   parseVacancyExtractionResponse(
     response: string | undefined,
-    isUnstructuredModel: boolean = false,
+    _isUnstructuredModel: boolean = false,
     metadata: any = {},
   ): VacancyExtractionResult | null {
     if (!response) return null;
@@ -139,7 +139,7 @@ export class AIPromptService {
    */
   parseCompanyAnalysisResponse(
     response: string | undefined,
-    isUnstructuredModel: boolean = false,
+    _isUnstructuredModel: boolean = false,
     analysisType: 'profile' | 'website' | 'consolidated' = 'profile',
     metadata: any = {},
   ): CompanyProfileAnalysisResult | null {
@@ -298,7 +298,7 @@ Please respond with valid JSON only. No additional text or explanations.`;
     content: string,
     sourceUrl?: string,
     existingData?: any,
-    isUnstructured: boolean = false,
+    _isUnstructured: boolean = false,
   ): string {
     let prompt = `Please extract job vacancy information from the following content:\n\n${content}`;
 
@@ -329,7 +329,7 @@ Provide a confidence score (0.0 to 1.0) based on information clarity and complet
     content: string,
     sourceUrl?: string,
     existingData?: any,
-    isUnstructured: boolean = false,
+    _isUnstructured: boolean = false,
   ): string {
     let prompt = `Analyze the following company information and extract structured data:\n\n${content}`;
 
@@ -359,7 +359,7 @@ Provide a confidence score based on data quality and completeness.`;
     content: string,
     sourceUrl?: string,
     existingData?: any,
-    isUnstructured: boolean = false,
+    _isUnstructured: boolean = false,
   ): string {
     let prompt = `Analyze this company website content for business insights:\n\n${content}`;
 
@@ -387,7 +387,7 @@ Provide detailed analysis with confidence scoring.`;
 
   private buildCompanyConsolidationUserPrompt(
     consolidationInput: any,
-    isUnstructured: boolean = false,
+    _isUnstructured: boolean = false,
   ): string {
     let prompt = `Consolidate the following company analyses into a comprehensive profile:\n\n`;
 

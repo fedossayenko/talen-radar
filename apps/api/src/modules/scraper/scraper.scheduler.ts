@@ -2,21 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bull';
 import * as Bull from 'bull';
-// import { AllJobData, AiExtractionJobData, BatchProcessingJobData } from './processors/scraper.processor';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { HashingUtil } from '../../common/utils/hashing.util';
 
 // Type definitions for job data
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-interface AllJobData {
-  type?: 'scrape' | 'ai-extraction' | 'batch-processing';
-  source?: string;
-  limit?: number;
-  force?: boolean;
-  triggeredBy?: string;
-  options?: any;
-}
 
 interface AiExtractionJobData {
   vacancyId?: string;

@@ -18,6 +18,9 @@ import { TechPatternService } from './services/tech-pattern.service';
 import { ContentExtractorService } from './services/content-extractor.service';
 import { HtmlCleanerService } from './services/html-cleaner.service';
 
+// Scheduler
+import { ScraperScheduler } from './scraper.scheduler';
+
 // Unified browser service
 import { BrowserEngineService } from './services/browser-engine.service';
 
@@ -69,6 +72,7 @@ import paidServicesConfig from '../../config/paid-services.config';
     // === Core Services ===
     ScraperService,
     ScraperRegistryService,
+    ScraperScheduler,
 
     // === Browser Services ===
     BrowserEngineService,

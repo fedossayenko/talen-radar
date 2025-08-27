@@ -5,7 +5,7 @@ import { AICompanyService, CompanyProfileAnalysisResult } from './services/ai-co
 import { AICoreService } from './services/ai-core.service';
 
 // Re-export interfaces for backward compatibility
-export { VacancyExtractionResult, CompanyProfileAnalysisResult };
+export type { VacancyExtractionResult, CompanyProfileAnalysisResult };
 
 /**
  * AiService - Facade for AI operations
