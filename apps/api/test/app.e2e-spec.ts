@@ -6,6 +6,9 @@ import compression from 'compression';
 import { AppModule } from '../src/app.module';
 import { RedisService } from '../src/common/redis/redis.service';
 import { RedisMockService } from './test-utils/redis-mock.service';
+import { AICoreService } from '../src/modules/ai/services/ai-core.service';
+import { AiRequestLoggerService } from '../src/common/ai-logging/ai-request-logger.service';
+import { AICoreServiceMock, AiRequestLoggerServiceMock } from './test-utils/ai-core-mock.service';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication;
@@ -17,9 +20,17 @@ describe('AppController (e2e)', () => {
     })
     .overrideProvider(RedisService)
     .useClass(RedisMockService)
+    .overrideProvider(AICoreService)
+    .useClass(AICoreServiceMock)
+    .overrideProvider(AiRequestLoggerService)
+    .useClass(AiRequestLoggerServiceMock)
     .compile();
 
     app = moduleRef.createNestApplication();
+    
+    if (!app) {
+      throw new Error('Failed to create NestJS application for testing');
+    }
     
     // Configure the app like in main.ts for tests
     app.use(helmet());
@@ -48,7 +59,12 @@ describe('AppController (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
+    if (moduleRef) {
+      await moduleRef.close();
+    }
   });
 
   describe('Health Checks', () => {

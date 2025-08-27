@@ -4,13 +4,23 @@ import { DatabaseHelper } from './database.helper';
 beforeAll(async () => {
   // Set test environment variables
   process.env.NODE_ENV = 'test';
-  process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/talent_radar_test';
+  process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:dev_postgres_password_change_in_production@localhost:5432/talent_radar_test';
   process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
   
   // Authentication configuration for tests
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-for-e2e-tests-only';
   process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'test_admin_password';
   process.env.USER_PASSWORD = process.env.USER_PASSWORD || 'test_user_password';
+  
+  // AI service configuration for tests
+  process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'test-openai-key-mock';
+  process.env.OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || 'test-openrouter-key-mock';
+  process.env.AI_SERVICE_ENABLED = 'false'; // Disable real AI services in tests
+  
+  // Scraper configuration for tests
+  process.env.SCRAPERAPI_KEY = process.env.SCRAPERAPI_KEY || 'test-scraper-key-mock';
+  process.env.ENABLE_PAID_SCRAPING = 'false'; // Disable real scraping in tests
+  process.env.SCRAPER_ENABLED = 'false'; // Disable real scraping in tests
   
   // Initialize test database
   await DatabaseHelper.initializeTestDatabase();
