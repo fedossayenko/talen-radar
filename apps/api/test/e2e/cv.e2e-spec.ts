@@ -391,7 +391,7 @@ describe('CVController (e2e)', () => {
 
       const company = await prisma.company.findFirst({ where: { name: 'Tech Corp' } });
       
-      const _vacancy = await prisma.vacancy.create({
+      await prisma.vacancy.create({
         data: MockDataFactory.createVacancyData({ 
           title: 'Java Developer',
           companyId: company.id,
@@ -469,7 +469,7 @@ describe('CVController (e2e)', () => {
       // Note: This test would require actual file upload in real implementation
       // For now, testing the endpoint structure
       
-      const _response = await request(app.getHttpServer())
+      await request(app.getHttpServer())
         .post('/api/v1/cvs/upload')
         .attach('file', Buffer.from('fake pdf content'), 'resume.pdf')
         .expect(400); // Expecting validation error in mock environment

@@ -205,21 +205,21 @@ describe('AiService - Company Analysis Methods', () => {
               hasStructuredData: true,
               language: 'en'
             }),
-            callOpenAI: jest.fn().mockImplementation(() => {
-              return mockOpenAI.chat.completions.create(...arguments);
+            callOpenAI: jest.fn().mockImplementation((...args) => {
+              return mockOpenAI.chat.completions.create(...args);
             }),
           },
         },
         {
           provide: AIPromptService,
           useValue: {
-            buildCompanyProfileMessages: jest.fn().mockImplementation((content, sourceUrl, existingData, isUnstructured) => [
+            buildCompanyProfileMessages: jest.fn().mockImplementation((_content, _sourceUrl, _existingData, _isUnstructured) => [
               {
                 role: 'user',
                 content: `Company profile content about TechCorp`
               }
             ]),
-            buildCompanyWebsiteMessages: jest.fn().mockImplementation((content, sourceUrl, existingData, isUnstructured) => [
+            buildCompanyWebsiteMessages: jest.fn().mockImplementation((_content, _sourceUrl, _existingData, _isUnstructured) => [
               {
                 role: 'user', 
                 content: `About TechCorp website content`
